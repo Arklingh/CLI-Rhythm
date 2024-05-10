@@ -4,11 +4,13 @@ extern crate tui;
 use std::env;
 use std::io::stdout;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::{fs, io};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear};
 use crossterm::ExecutableCommand;
+use rodio::{OutputStream, Sink};
 use tui::backend::CrosstermBackend;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
@@ -48,6 +50,13 @@ impl Song {
             is_playing: false,
         }
     }
+
+    fn play(&self, sink: &Arc<Mutex<Sink>>) {
+        let file = fs::File::open(&self.path).unwrap();
+        let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+        sink.lock().unwrap().append(source);
+        sink.lock().unwrap().play();
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -60,9 +69,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut songs = scan_folder_for_music();
     let mut selected_song_index = 0;
-
     // Sort songs alphabetically by title
     songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+
+    let mut currently_playing_index: Option<usize> = None;
+
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap()));
 
     // Run event loop
     loop {
@@ -178,6 +191,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if selected_song_index > 0 {
                         selected_song_index -= 1;
                     }
+                }
+                KeyEvent {
+                    code: KeyCode::Char(' '),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    if let Some(selected_song) = songs.get(selected_song_index) {
+                        selected_song.play(&sink);
+                        currently_playing_index = Some(selected_song_index);
+                    };
                 }
 
                 _ => {}
