@@ -199,8 +199,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state: KeyEventState::NONE,
                 } => {
                     if let Some(selected_song) = songs.get(selected_song_index) {
-                        selected_song.play(&sink);
-                        currently_playing_index = Some(selected_song_index);
+                        if currently_playing_index.is_none()
+                            || selected_song_index != currently_playing_index.unwrap()
+                        {
+                            selected_song.play(&sink);
+                            currently_playing_index = Some(selected_song_index);
+                        } else {
+                            sink.lock().unwrap().clear();
+                            currently_playing_index = None;
+                        }
                     };
                 }
 
