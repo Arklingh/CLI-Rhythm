@@ -58,6 +58,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
+    let mut songs = scan_folder_for_music();
+
+    // Sort songs alphabetically by title
+    songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+
     // Run event loop
     loop {
         terminal.draw(|f| {
@@ -82,12 +87,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
                 .split(vertical_layout[1]);
 
-            let song_items: Vec<ListItem> = vec![0, 1, 2]
+            let song_items: Vec<ListItem> = songs
                 .iter()
                 .enumerate()
                 .map(|(_index, song)| {
                     let style = Style::default();
-                    ListItem::new(song.to_string().clone()).style(style)
+                    ListItem::new(song.title.clone()).style(style)
                 })
                 .collect();
 
