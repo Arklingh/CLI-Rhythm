@@ -59,6 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
     let mut songs = scan_folder_for_music();
+    let mut selected_song_index = 0;
 
     // Sort songs alphabetically by title
     songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
@@ -90,8 +91,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let song_items: Vec<ListItem> = songs
                 .iter()
                 .enumerate()
-                .map(|(_index, song)| {
-                    let style = Style::default();
+                .map(|(index, song)| {
+                    let mut style = Style::default();
+                    if index == selected_song_index {
+                        style = Style::default()
+                            .fg(Color::LightBlue)
+                            .add_modifier(Modifier::BOLD);
+                    }
+
                     ListItem::new(song.title.clone()).style(style)
                 })
                 .collect();
@@ -150,6 +157,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } => {
                     break;
                 }
+                KeyEvent {
+                    code: KeyCode::Down,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    // Move selection down
+                    if selected_song_index < songs.len() - 1 {
+                        selected_song_index += 1;
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Up,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    // Move selection up
+                    if selected_song_index > 0 {
+                        selected_song_index -= 1;
+                    }
+                }
+
                 _ => {}
             }
         }
