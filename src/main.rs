@@ -222,6 +222,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         sink.lock().unwrap().pause();
                     }
                 }
+                KeyEvent {
+                    code: KeyCode::Char('h'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    if selected_song_index > 0 {
+                        selected_song_index -= 1;
+                        sink.lock().unwrap().clear();
+                        songs[selected_song_index].play(&sink);
+                        currently_playing_index = Some(selected_song_index);
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Char('l'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    if selected_song_index < songs.len() - 1 {
+                        selected_song_index += 1;
+                        sink.lock().unwrap().clear();
+                        songs[selected_song_index].play(&sink);
+                        currently_playing_index = Some(selected_song_index);
+                    }
+                }
 
                 _ => {}
             }
