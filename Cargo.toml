@@ -1,0 +1,17 @@
+[package]
+name = "CLI-Rhythm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Andrii <andriikurochka@ukr.net>"]
+description = "A simple and functional CLI music player."
+readme = "README.md"
+repository = "https://github.com/Arklingh/CLI-Rhythm"
+license-file = "LICENSE"
+
+[dependencies]
+audiotags = "0.5.0"
+crossterm = "0.27.0"
+dirs = "5.0.1"
+mp3-metadata = "0.3.4"
+rodio = "0.17.3"
+tui = "0.19.0"
