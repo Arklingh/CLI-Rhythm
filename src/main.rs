@@ -210,6 +210,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
                 }
+                KeyEvent {
+                    code: KeyCode::Char('p'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    if sink.lock().unwrap().is_paused() {
+                        sink.lock().unwrap().play();
+                    } else {
+                        sink.lock().unwrap().pause();
+                    }
+                }
 
                 _ => {}
             }
