@@ -154,7 +154,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let volume_bar = Gauge::default()
                 .block(Block::default().borders(Borders::ALL).title("Volume"))
                 .gauge_style(Style::default().fg(Color::LightBlue))
-                .label(format!("100%"));
+                .label(format!("{:.0}%", sink.lock().unwrap().volume() * 100.0))
+                .ratio(sink.lock().unwrap().volume() as f64);
 
             f.render_widget(volume_bar, footer[1]);
         })?;
@@ -246,6 +247,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         sink.lock().unwrap().clear();
                         songs[selected_song_index].play(&sink);
                         currently_playing_index = Some(selected_song_index);
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Char('m'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    let sink = &mut sink.lock().unwrap();
+                    if sink.volume() > 0.0 {
+                        // Mute music
+                        sink.set_volume(0.0);
+                    } else {
+                        // Unmute music
+                        sink.set_volume(1.0);
                     }
                 }
 
