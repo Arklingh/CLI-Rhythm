@@ -68,7 +68,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
     let mut songs = scan_folder_for_music();
+
     let mut selected_song_index = 0;
+
     // Sort songs alphabetically by title
     songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
 
@@ -247,6 +249,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         sink.lock().unwrap().clear();
                         songs[selected_song_index].play(&sink);
                         currently_playing_index = Some(selected_song_index);
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Left,
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    // Decrease volume by 5%
+                    let sink = &mut sink.lock().unwrap();
+                    let volume = sink.volume();
+                    if volume >= 0.05 {
+                        sink.set_volume(volume - 0.05);
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Right,
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    // Increase volume by 5%
+                    let sink = &mut sink.lock().unwrap();
+                    let volume = sink.volume();
+                    if volume <= 0.95 {
+                        sink.set_volume(volume + 0.05);
                     }
                 }
                 KeyEvent {
