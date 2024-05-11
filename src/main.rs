@@ -69,6 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut songs = scan_folder_for_music();
 
+    let mut previous_volume = 1.0;
+
     let mut selected_song_index = 0;
 
     // Sort songs alphabetically by title
@@ -286,10 +288,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let sink = &mut sink.lock().unwrap();
                     if sink.volume() > 0.0 {
                         // Mute music
+                        previous_volume = sink.volume(); // Save current volume
                         sink.set_volume(0.0);
                     } else {
                         // Unmute music
-                        sink.set_volume(1.0);
+                        sink.set_volume(previous_volume); // Restore previous volume
                     }
                 }
 
