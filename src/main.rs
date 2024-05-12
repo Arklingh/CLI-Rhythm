@@ -59,6 +59,12 @@ impl Song {
     }
 }
 
+enum SearchCriteria {
+    Title,
+    Artist,
+    Album,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
@@ -68,12 +74,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
     let mut songs = scan_folder_for_music();
+    let mut filtered_songs: Vec<&Song> = Vec::new();
 
     let mut previous_volume = 1.0;
 
     let mut selected_song_index = 0;
 
     let mut search_text = String::new();
+    let mut search_criteria = SearchCriteria::Title;
 
     // Sort songs alphabetically by title
     songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
@@ -96,29 +104,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ])
                 .split(f.size());
 
-            // Render search bar
+            let search_bar_title = match search_criteria {
+                SearchCriteria::Title => "Search by Title",
+                SearchCriteria::Artist => "Search by Artist",
+                SearchCriteria::Album => "Search by Album",
+            };
+
             // Render search bar
             let search_bar = Paragraph::new(Text::raw(format!("{}", search_text)))
-                .block(Block::default().borders(Borders::ALL).title("Search"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(search_bar_title),
+                )
                 .style(Style::default().fg(Color::White));
             f.render_widget(search_bar, vertical_layout[0]);
+
+            // Filter songs based on search text
+            filtered_songs = songs
+                .iter()
+                .filter(|s| match search_criteria {
+                    SearchCriteria::Title => {
+                        s.title.to_lowercase().contains(&search_text.to_lowercase())
+                    }
+                    SearchCriteria::Artist => s
+                        .artist
+                        .to_lowercase()
+                        .contains(&search_text.to_lowercase()),
+                    SearchCriteria::Album => {
+                        s.album.to_lowercase().contains(&search_text.to_lowercase())
+                    }
+                })
+                .collect();
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
                 .split(vertical_layout[1]);
 
-            let song_items: Vec<ListItem> = songs
+            let song_items: Vec<ListItem> = filtered_songs
                 .iter()
                 .enumerate()
                 .map(|(index, song)| {
                     let mut style = Style::default();
-                    if index == selected_song_index {
+                    if selected_song_index == index {
                         style = Style::default()
                             .fg(Color::LightBlue)
                             .add_modifier(Modifier::BOLD);
                     }
-
                     ListItem::new(song.title.clone()).style(style)
                 })
                 .collect();
@@ -321,6 +354,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state: KeyEventState::NONE,
                 } => {
                     search_text.pop();
+                }
+                KeyEvent {
+                    code: KeyCode::Char('s'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_criteria = match search_criteria {
+                        SearchCriteria::Title => SearchCriteria::Artist,
+                        SearchCriteria::Artist => SearchCriteria::Album,
+                        SearchCriteria::Album => SearchCriteria::Title,
+                    };
                 }
 
                 _ => {}
