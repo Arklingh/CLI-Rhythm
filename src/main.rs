@@ -314,6 +314,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } => {
                     search_text.push(c.to_uppercase().last().unwrap());
                 }
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_text.pop();
+                }
 
                 _ => {}
             }
