@@ -73,6 +73,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut selected_song_index = 0;
 
+    let mut search_text = String::new();
+
     // Sort songs alphabetically by title
     songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
 
@@ -95,7 +97,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(f.size());
 
             // Render search bar
-            let search_bar = Paragraph::new(Text::raw(""))
+            // Render search bar
+            let search_bar = Paragraph::new(Text::raw(format!("{}", search_text)))
                 .block(Block::default().borders(Borders::ALL).title("Search"))
                 .style(Style::default().fg(Color::White));
             f.render_widget(search_bar, vertical_layout[0]);
@@ -294,6 +297,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Unmute music
                         sink.set_volume(previous_volume); // Restore previous volume
                     }
+                }
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_text.push(c);
+                }
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    modifiers: KeyModifiers::SHIFT,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_text.push(c.to_uppercase().last().unwrap());
                 }
 
                 _ => {}
