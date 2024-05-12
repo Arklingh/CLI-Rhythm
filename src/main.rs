@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut previous_volume = 1.0;
 
-    let mut selected_song_index = 0;
+    let mut selected_song_index: Option<usize> = None;
 
     let mut search_text = String::new();
     let mut search_criteria = SearchCriteria::Title;
@@ -147,7 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .enumerate()
                 .map(|(index, song)| {
                     let mut style = Style::default();
-                    if selected_song_index == index {
+                    if selected_song_index.is_some_and(|select| select == index) {
                         style = Style::default()
                             .fg(Color::LightBlue)
                             .add_modifier(Modifier::BOLD);
@@ -218,8 +218,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state: KeyEventState::NONE,
                 } => {
                     // Move selection down
-                    if selected_song_index < songs.len() - 1 {
-                        selected_song_index += 1;
+                    if let Some(index) = selected_song_index {
+                        if index < filtered_songs.len() - 1 {
+                            selected_song_index = Some(index + 1);
+                        } else {
+                            selected_song_index = Some(0);
+                        }
+                    } else if !filtered_songs.is_empty() {
+                        selected_song_index = Some(0);
                     }
                 }
                 KeyEvent {
@@ -229,8 +235,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state: KeyEventState::NONE,
                 } => {
                     // Move selection up
-                    if selected_song_index > 0 {
-                        selected_song_index -= 1;
+                    if let Some(index) = selected_song_index {
+                        if index > 0 {
+                            selected_song_index = Some(index - 1);
+                        } else {
+                            selected_song_index = Some(filtered_songs.len() - 1);
+                        }
+                    } else if !filtered_songs.is_empty() {
+                        selected_song_index = Some(filtered_songs.len() - 1);
                     }
                 }
                 KeyEvent {
@@ -239,17 +251,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     kind: KeyEventKind::Press,
                     state: KeyEventState::NONE,
                 } => {
-                    if let Some(selected_song) = songs.get(selected_song_index) {
-                        if currently_playing_index.is_none()
-                            || selected_song_index != currently_playing_index.unwrap()
-                        {
-                            selected_song.play(&sink);
-                            currently_playing_index = Some(selected_song_index);
-                        } else {
-                            sink.lock().unwrap().clear();
-                            currently_playing_index = None;
+                    if let Some(index) = selected_song_index {
+                        if let Some(selected_song) = filtered_songs.get(index) {
+                            if currently_playing_index.is_none()
+                                || Some(index) != currently_playing_index
+                            {
+                                sink.lock().unwrap().clear();
+                                selected_song.play(&sink);
+                                currently_playing_index = Some(index);
+                            } else {
+                                sink.lock().unwrap().clear();
+                                currently_playing_index = None;
+                            }
                         }
-                    };
+                    }
                 }
                 KeyEvent {
                     code: KeyCode::Char('p'),
@@ -269,11 +284,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     kind: KeyEventKind::Press,
                     state: KeyEventState::NONE,
                 } => {
-                    if selected_song_index > 0 {
-                        selected_song_index -= 1;
+                    if selected_song_index.is_some_and(|idx| idx > 0) {
+                        let mut idx = selected_song_index.unwrap();
+                        idx -= 1;
                         sink.lock().unwrap().clear();
-                        songs[selected_song_index].play(&sink);
-                        currently_playing_index = Some(selected_song_index);
+                        songs[idx].play(&sink);
+                        currently_playing_index = Some(idx);
                     }
                 }
                 KeyEvent {
@@ -282,11 +298,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     kind: KeyEventKind::Press,
                     state: KeyEventState::NONE,
                 } => {
-                    if selected_song_index < songs.len() - 1 {
-                        selected_song_index += 1;
+                    if selected_song_index.is_some_and(|idx| idx < songs.len() - 1) {
+                        let mut idx = selected_song_index.unwrap();
+                        idx += 1;
                         sink.lock().unwrap().clear();
-                        songs[selected_song_index].play(&sink);
-                        currently_playing_index = Some(selected_song_index);
+                        songs[idx].play(&sink);
+                        currently_playing_index = Some(idx);
                     }
                 }
                 KeyEvent {
