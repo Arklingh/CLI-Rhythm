@@ -165,10 +165,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             f.render_widget(song_list, chunks[0]);
 
-            let song_details = format!(
-                "Artist: {}\nSong: {}\nAlbum: {}\nDuration: {:02}:{:02}",
-                "None", "None", "None", 0, 0
-            );
+            let selected_song = match selected_song_index {
+                Some(index) => filtered_songs.get(index),
+                None => None,
+            };
+
+            let song_details = if let Some(song) = selected_song {
+                format!(
+                    "Artist: {}\nSong: {}\nAlbum: {}\nDuration: {:02}:{:02}",
+                    song.artist,
+                    song.title,
+                    song.album,
+                    (song.duration / 60.0).floor(),
+                    (song.duration % 60.0).round()
+                )
+            } else {
+                "No song selected".to_string()
+            };
+
             let selected_song_info = Paragraph::new(song_details)
                 .block(
                     Block::default()
