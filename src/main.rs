@@ -59,6 +59,12 @@ impl Song {
     }
 }
 
+enum SearchCriteria {
+    Title,
+    Artist,
+    Album,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
@@ -68,7 +74,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
     let mut songs = scan_folder_for_music();
-    let mut selected_song_index = 0;
+    let mut filtered_songs: Vec<&Song> = Vec::new();
+
+    let mut previous_volume = 1.0;
+
+    let mut selected_song_index: Option<usize> = None;
+
+    let mut search_text = String::new();
+    let mut search_criteria = SearchCriteria::Title;
+
     // Sort songs alphabetically by title
     songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
 
@@ -90,28 +104,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ])
                 .split(f.size());
 
+            let search_bar_title = match search_criteria {
+                SearchCriteria::Title => "Search by Title",
+                SearchCriteria::Artist => "Search by Artist",
+                SearchCriteria::Album => "Search by Album",
+            };
+
             // Render search bar
-            let search_bar = Paragraph::new(Text::raw(""))
-                .block(Block::default().borders(Borders::ALL).title("Search"))
+            let search_bar = Paragraph::new(Text::raw(format!("{}", search_text)))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(search_bar_title),
+                )
                 .style(Style::default().fg(Color::White));
             f.render_widget(search_bar, vertical_layout[0]);
+
+            // Filter songs based on search text
+            filtered_songs = songs
+                .iter()
+                .filter(|s| match search_criteria {
+                    SearchCriteria::Title => {
+                        s.title.to_lowercase().contains(&search_text.to_lowercase())
+                    }
+                    SearchCriteria::Artist => s
+                        .artist
+                        .to_lowercase()
+                        .contains(&search_text.to_lowercase()),
+                    SearchCriteria::Album => {
+                        s.album.to_lowercase().contains(&search_text.to_lowercase())
+                    }
+                })
+                .collect();
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
                 .split(vertical_layout[1]);
 
-            let song_items: Vec<ListItem> = songs
+            let song_items: Vec<ListItem> = filtered_songs
                 .iter()
                 .enumerate()
                 .map(|(index, song)| {
                     let mut style = Style::default();
-                    if index == selected_song_index {
+                    if selected_song_index.is_some_and(|select| select == index) {
                         style = Style::default()
                             .fg(Color::LightBlue)
                             .add_modifier(Modifier::BOLD);
                     }
-
                     ListItem::new(song.title.clone()).style(style)
                 })
                 .collect();
@@ -154,7 +194,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let volume_bar = Gauge::default()
                 .block(Block::default().borders(Borders::ALL).title("Volume"))
                 .gauge_style(Style::default().fg(Color::LightBlue))
-                .label(format!("100%"));
+                .label(format!("{:.0}%", sink.lock().unwrap().volume() * 100.0))
+                .ratio(sink.lock().unwrap().volume() as f64);
 
             f.render_widget(volume_bar, footer[1]);
         })?;
@@ -177,8 +218,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state: KeyEventState::NONE,
                 } => {
                     // Move selection down
-                    if selected_song_index < songs.len() - 1 {
-                        selected_song_index += 1;
+                    if let Some(index) = selected_song_index {
+                        if index < filtered_songs.len() - 1 {
+                            selected_song_index = Some(index + 1);
+                        } else {
+                            selected_song_index = Some(0);
+                        }
+                    } else if !filtered_songs.is_empty() {
+                        selected_song_index = Some(0);
                     }
                 }
                 KeyEvent {
@@ -188,8 +235,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state: KeyEventState::NONE,
                 } => {
                     // Move selection up
-                    if selected_song_index > 0 {
-                        selected_song_index -= 1;
+                    if let Some(index) = selected_song_index {
+                        if index > 0 {
+                            selected_song_index = Some(index - 1);
+                        } else {
+                            selected_song_index = Some(filtered_songs.len() - 1);
+                        }
+                    } else if !filtered_songs.is_empty() {
+                        selected_song_index = Some(filtered_songs.len() - 1);
                     }
                 }
                 KeyEvent {
@@ -198,17 +251,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     kind: KeyEventKind::Press,
                     state: KeyEventState::NONE,
                 } => {
-                    if let Some(selected_song) = songs.get(selected_song_index) {
-                        if currently_playing_index.is_none()
-                            || selected_song_index != currently_playing_index.unwrap()
-                        {
-                            selected_song.play(&sink);
-                            currently_playing_index = Some(selected_song_index);
-                        } else {
-                            sink.lock().unwrap().clear();
-                            currently_playing_index = None;
+                    if let Some(index) = selected_song_index {
+                        if let Some(selected_song) = filtered_songs.get(index) {
+                            if currently_playing_index.is_none()
+                                || Some(index) != currently_playing_index
+                            {
+                                sink.lock().unwrap().clear();
+                                selected_song.play(&sink);
+                                currently_playing_index = Some(index);
+                            } else {
+                                sink.lock().unwrap().clear();
+                                currently_playing_index = None;
+                            }
                         }
-                    };
+                    }
                 }
                 KeyEvent {
                     code: KeyCode::Char('p'),
@@ -228,11 +284,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     kind: KeyEventKind::Press,
                     state: KeyEventState::NONE,
                 } => {
-                    if selected_song_index > 0 {
-                        selected_song_index -= 1;
+                    if selected_song_index.is_some_and(|idx| idx > 0) {
+                        let mut idx = selected_song_index.unwrap();
+                        idx -= 1;
                         sink.lock().unwrap().clear();
-                        songs[selected_song_index].play(&sink);
-                        currently_playing_index = Some(selected_song_index);
+                        songs[idx].play(&sink);
+                        currently_playing_index = Some(idx);
                     }
                 }
                 KeyEvent {
@@ -241,12 +298,91 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     kind: KeyEventKind::Press,
                     state: KeyEventState::NONE,
                 } => {
-                    if selected_song_index < songs.len() - 1 {
-                        selected_song_index += 1;
+                    if selected_song_index.is_some_and(|idx| idx < songs.len() - 1) {
+                        let mut idx = selected_song_index.unwrap();
+                        idx += 1;
                         sink.lock().unwrap().clear();
-                        songs[selected_song_index].play(&sink);
-                        currently_playing_index = Some(selected_song_index);
+                        songs[idx].play(&sink);
+                        currently_playing_index = Some(idx);
                     }
+                }
+                KeyEvent {
+                    code: KeyCode::Left,
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    // Decrease volume by 5%
+                    let sink = &mut sink.lock().unwrap();
+                    let volume = sink.volume();
+                    if volume >= 0.05 {
+                        sink.set_volume(volume - 0.05);
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Right,
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    // Increase volume by 5%
+                    let sink = &mut sink.lock().unwrap();
+                    let volume = sink.volume();
+                    if volume <= 0.95 {
+                        sink.set_volume(volume + 0.05);
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Char('m'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    let sink = &mut sink.lock().unwrap();
+                    if sink.volume() > 0.0 {
+                        // Mute music
+                        previous_volume = sink.volume(); // Save current volume
+                        sink.set_volume(0.0);
+                    } else {
+                        // Unmute music
+                        sink.set_volume(previous_volume); // Restore previous volume
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_text.push(c);
+                }
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    modifiers: KeyModifiers::SHIFT,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_text.push(c.to_uppercase().last().unwrap());
+                }
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_text.pop();
+                }
+                KeyEvent {
+                    code: KeyCode::Char('s'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: KeyEventState::NONE,
+                } => {
+                    search_criteria = match search_criteria {
+                        SearchCriteria::Title => SearchCriteria::Artist,
+                        SearchCriteria::Artist => SearchCriteria::Album,
+                        SearchCriteria::Album => SearchCriteria::Title,
+                    };
                 }
 
                 _ => {}
