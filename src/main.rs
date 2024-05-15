@@ -196,15 +196,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .style(Style::default().fg(Color::Cyan));
             f.render_widget(selected_song_info, chunks[1]);
 
+            let progress_ratio = if let Some(song) = selected_song {
+                if song.duration > 0.0 {
+                    song.elapsed / song.duration
+                } else {
+                    0.0 // Prevent division by zero if duration is 0
+                }
+            } else {
+                0.0 // No song selected, so progress is 0
+            };
+
             let footer = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
                 .split(vertical_layout[2]);
 
-            let song_progress = Gauge::default()
-                .block(Block::default().borders(Borders::ALL).title("Progress"))
-                .gauge_style(Style::default().fg(Color::White))
-                .label("");
+            let song_progress = if let Some(song) =
+                songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0)))
+            {
+                Gauge::default()
+                    .block(Block::default().borders(Borders::ALL).title("Progress"))
+                    .gauge_style(Style::default().fg(Color::White))
+                    .label(format!(
+                        "{:.2}%        {:02}:{:02}/{:02}:{:02}",
+                        progress_ratio * 100.0,
+                        (song.elapsed / 60.0).floor(),
+                        (song.elapsed % 60.0).round(),
+                        (song.duration / 60.0).floor(),
+                        (song.duration % 60.0).round()
+                    ))
+                    .ratio(progress_ratio)
+            } else {
+                Gauge::default()
+                    .block(Block::default().borders(Borders::ALL).title("Progress"))
+                    .gauge_style(Style::default().fg(Color::White))
+                    .label("No song selected")
+                    .ratio(0.0)
+            };
+
+            /* let song_progress = if let Some(song) = selected_song {
+                Gauge::default()
+                    .block(Block::default().borders(Borders::ALL).title("Progress"))
+                    .gauge_style(Style::default().fg(Color::White))
+                    .label(format!(
+                        "{:.2}%        {:02}:{:02}/{:02}:{:02}",
+                        progress_ratio * 100.0,
+                        (song.elapsed / 60.0).floor(),
+                        (song.elapsed % 60.0).round(),
+                        (song.duration / 60.0).floor(),
+                        (song.duration % 60.0).round()
+                    ))
+                    .ratio(progress_ratio)
+            } else {
+                Gauge::default()
+                    .block(Block::default().borders(Borders::ALL).title("Progress"))
+                    .gauge_style(Style::default().fg(Color::White))
+                    .label("No song selected")
+                    .ratio(0.0)
+            }; */
 
             f.render_widget(song_progress, footer[0]);
 
