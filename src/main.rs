@@ -14,7 +14,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, LeaveAlterna
 use crossterm::ExecutableCommand;
 use rodio::{OutputStream, Sink, Source};
 use tui::backend::CrosstermBackend;
-use tui::layout::{Constraint, Direction, Layout};
+use tui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::text::Text;
 use tui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph};
@@ -66,6 +66,16 @@ enum SearchCriteria {
     Album,
 }
 
+struct PopupState {
+    visible: bool,
+}
+
+impl PopupState {
+    fn toggle(&mut self) {
+        self.visible = !self.visible;
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
@@ -88,6 +98,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut search_criteria = SearchCriteria::Title;
     let mut currently_playing_index: Option<usize> = None;
     let mut song_time: Option<Instant> = None;
+
+    let mut popup_state = PopupState { visible: false };
 
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap()));
@@ -238,6 +250,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .label(format!("{:.0}%", sink.lock().unwrap().volume() * 100.0))
             .ratio(sink.lock().unwrap().volume() as f64);
 
+        let hint = Paragraph::new("F1 for controls")
+            .style(
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::ITALIC),
+            )
+            .alignment(Alignment::Right);
+
         terminal.draw(|f| {
             let vertical_layout = Layout::default()
                 .direction(Direction::Vertical)
@@ -268,6 +288,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             f.render_widget(song_progress, footer[0]);
 
             f.render_widget(volume_bar, footer[1]);
+
+            if popup_state.visible {
+                let _ = draw_popup(f);
+            }
+
+            f.render_widget(
+                hint,
+                Rect::new(
+                    f.size().width.saturating_sub(20 as u16),
+                    f.size().height - 1,
+                    20 as u16,
+                    1,
+                ),
+            );
         })?;
 
         // Handle input events
@@ -506,6 +540,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     }
+                    KeyEvent {
+                        code: KeyCode::F(1),
+                        modifiers: KeyModifiers::NONE,
+                        kind: KeyEventKind::Press,
+                        state: KeyEventState::NONE,
+                    } => {
+                        popup_state.toggle();
+                    }
+                    KeyEvent {
+                        code: KeyCode::Esc,
+                        modifiers: KeyModifiers::NONE,
+                        kind: KeyEventKind::Press,
+                        state: KeyEventState::NONE,
+                    } => {
+                        // Close the popup if it's open
+                        popup_state.visible = false;
+                    }
+
                     _ => {}
                 }
             } else {
@@ -626,4 +678,39 @@ fn scan_folder_for_music() -> Vec<Song> {
     }
 
     song_list
+}
+
+fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io::Error> {
+    let size = f.size();
+    let popup_width = size.width / 3;
+    let popup_height = size.height / 3;
+    let popup_area = Rect::new(
+        (size.width - popup_width) / 2,
+        (size.height - popup_height) / 2,
+        popup_width,
+        popup_height,
+    );
+
+    f.render_widget(Block::default().borders(Borders::ALL), popup_area);
+
+    let popup_text = Paragraph::new(
+        "Controls
+- Use Up/Down Arrow Keys to navigate songs
+- Ctrl + Spacebar: Play/Stop
+- Ctrl + P: Pause/Unpause
+- Ctrl + M: Mute/Unmute
+- Ctrl + S: Change search criteria
+- Ctrl + Left/Right Arrow Keys: Adjust Volume
+- Left Arrow Key: -5 seconds on current song
+- Right Arrow Key: +5 seconds on current song
+- Backspace: Delete characters in the search bar
+- F1: Toggle Controls Popup
+- Esc or F1: Close Popup",
+    )
+    .block(Block::default().borders(Borders::NONE))
+    .alignment(Alignment::Center)
+    .style(Style::default().fg(Color::White));
+    f.render_widget(popup_text, popup_area);
+
+    Ok(())
 }
