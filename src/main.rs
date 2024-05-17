@@ -3,7 +3,7 @@ extern crate tui;
 
 use std::env;
 use std::io::stdout;
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -184,35 +184,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let progress_ratio = if let Some(song) =
-            songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0)))
-        {
-            if song.duration > 0.0 && song_time.is_some() {
-                let res = song_time.unwrap().elapsed().as_secs_f64() / song.duration;
-                if res > 1.0 {
-                    0.0_f64
-                } else {
-                    res
+        let progress_ratio =
+            match songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0))) {
+                Some(song) if song.duration > 0.0 => {
+                    if let Some(song_time) = song_time {
+                        let elapsed_time = song_time.elapsed().as_secs_f64().min(song.duration);
+                        if elapsed_time >= song.duration {
+                            // If the song is over, set progress to 0
+                            0.0
+                        } else {
+                            elapsed_time / song.duration
+                        }
+                    } else {
+                        0.0
+                    }
                 }
-            } else {
-                0.0 // Prevent division by zero if duration is 0
-            }
-        } else {
-            0.0 // No song selected, so progress is 0
-        };
+                _ => 0.0,
+            };
 
         let song_progress = if let Some(song) =
             songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0)))
         {
+            let elapsed_time = song_time
+                .unwrap_or(Instant::now())
+                .elapsed()
+                .as_secs_f64()
+                .min(song.duration);
+            let elapsed_minutes = (elapsed_time / 60.0).floor() as u64;
+            let elapsed_seconds = (elapsed_time % 60.0).round() as u64;
+            let duration_minutes = (song.duration / 60.0).floor() as u64;
+            let duration_seconds = (song.duration % 60.0).round() as u64;
+
             Gauge::default()
                 .block(Block::default().borders(Borders::ALL).title("Progress"))
                 .gauge_style(Style::default().fg(Color::LightBlue))
                 .label(format!(
                     "{:02}:{:02}/{:02}:{:02}",
-                    (song_time.unwrap_or(Instant::now()).elapsed().as_secs_f64() / 60.0).floor(),
-                    (song_time.unwrap_or(Instant::now()).elapsed().as_secs_f64() % 60.0).round(),
-                    (song.duration / 60.0).floor(),
-                    (song.duration % 60.0).round()
+                    elapsed_minutes, elapsed_seconds, duration_minutes, duration_seconds
                 ))
                 .ratio(progress_ratio)
         } else {
@@ -263,7 +271,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         // Handle input events
-        if poll(Duration::from_millis(500))? {
+        if poll(Duration::from_millis(200))? {
             if let Event::Key(key) = crossterm::event::read()? {
                 match key {
                     KeyEvent {
@@ -459,17 +467,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         };
                     }
                     KeyEvent {
-                        code: KeyCode::Char('f'),
-                        modifiers: KeyModifiers::CONTROL,
+                        code: KeyCode::Right,
+                        modifiers: KeyModifiers::NONE,
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
                         if let Some(index) = currently_playing_index {
                             let file = fs::File::open(&songs[index].path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                            song_time.unwrap().add_assign(Duration::from_secs(5));
-                            let target_time_secs = song_time.unwrap().elapsed().as_secs();
-                            let source = source.skip_duration(Duration::new(target_time_secs, 0));
+                            let time = song_time.unwrap().sub(Duration::from_secs(5));
+                            song_time = Some(time);
+                            let source = source.skip_duration(time.elapsed());
                             sink.lock().unwrap().clear();
                             sink.lock().unwrap().append(source);
                             sink.lock().unwrap().play();
@@ -479,19 +487,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     KeyEvent {
-                        code: KeyCode::Char('b'),
-                        modifiers: KeyModifiers::CONTROL,
+                        code: KeyCode::Left,
+                        modifiers: KeyModifiers::NONE,
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
                         if let Some(index) = currently_playing_index {
                             let file = fs::File::open(&songs[index].path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                            // let source = source.skippable();
-                            song_time.unwrap().add_assign(Duration::from_secs(5));
-                            let target_time_secs =
-                                song_time.unwrap().elapsed().add(Duration::from_secs(5));
-                            let source = source.skip_duration(target_time_secs);
+                            let time = song_time.unwrap().add(Duration::from_secs(5));
+                            song_time = Some(time);
+                            let source = source.skip_duration(time.elapsed());
                             sink.lock().unwrap().clear();
                             sink.lock().unwrap().append(source);
                             sink.lock().unwrap().play();
