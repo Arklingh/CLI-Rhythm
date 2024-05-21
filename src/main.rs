@@ -400,12 +400,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if selected_song_index.is_some_and(|idx| idx > 0) {
-                            let mut idx = selected_song_index.unwrap();
+                        if currently_playing_index.is_some_and(|idx| idx > 0) {
+                            let mut idx = currently_playing_index.unwrap();
                             idx -= 1;
                             sink.lock().unwrap().clear();
                             songs[idx].play(&sink);
                             currently_playing_index = Some(idx);
+                            selected_song_index = Some(idx);
                         }
                     }
                     KeyEvent {
@@ -414,11 +415,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if selected_song_index.is_some_and(|idx| idx < songs.len() - 1) {
-                            let mut idx = selected_song_index.unwrap();
+                        if currently_playing_index.is_some_and(|idx| idx < songs.len() - 1) {
+                            let mut idx = currently_playing_index.unwrap();
                             idx += 1;
                             sink.lock().unwrap().clear();
                             songs[idx].play(&sink);
+                            selected_song_index = Some(idx);
                             currently_playing_index = Some(idx);
                         }
                     }
