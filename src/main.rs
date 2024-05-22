@@ -407,6 +407,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             songs[idx].play(&sink);
                             currently_playing_index = Some(idx);
                             selected_song_index = Some(idx);
+                            song_time = Some(Instant::now());
                         }
                     }
                     KeyEvent {
@@ -422,6 +423,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             songs[idx].play(&sink);
                             selected_song_index = Some(idx);
                             currently_playing_index = Some(idx);
+                            song_time = Some(Instant::now());
                         }
                     }
                     KeyEvent {
