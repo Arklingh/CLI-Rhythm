@@ -26,9 +26,7 @@ use textwrap::wrap;
 use audiotags::{types::Album, Tag};
 use mp3_metadata::read_from_file;
 
-const MUSIC_FORMATS: [&str; 10] = [
-    "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "alac", "ape", "opus",
-];
+const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
 
 #[derive(Debug, PartialEq, PartialOrd, Default, Clone)]
 struct Song {
@@ -687,7 +685,7 @@ fn scan_folder_for_music() -> Vec<Song> {
 fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io::Error> {
     let size = f.size();
     let popup_width = size.width / 3;
-    let popup_height = size.height / 3;
+    let popup_height = size.height / 3 + 1;
     let popup_area = Rect::new(
         (size.width - popup_width) / 2,
         (size.height - popup_height) / 2,
