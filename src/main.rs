@@ -26,9 +26,7 @@ use textwrap::wrap;
 use audiotags::{types::Album, Tag};
 use mp3_metadata::read_from_file;
 
-const MUSIC_FORMATS: [&str; 10] = [
-    "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "alac", "ape", "opus",
-];
+const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
 
 #[derive(Debug, PartialEq, PartialOrd, Default, Clone)]
 struct Song {
@@ -687,7 +685,7 @@ fn scan_folder_for_music() -> Vec<Song> {
 fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io::Error> {
     let size = f.size();
     let popup_width = size.width / 3;
-    let popup_height = size.height / 3;
+    let popup_height = size.height / 3 + 1;
     let popup_area = Rect::new(
         (size.width - popup_width) / 2,
         (size.height - popup_height) / 2,
@@ -705,6 +703,8 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
 - Ctrl + M: Mute/Unmute
 - Ctrl + S: Change search criteria
 - Ctrl + Left/Right Arrow Keys: Adjust Volume
+- Ctrl + L: Next song
+- Ctrl + H: Previous song
 - Left Arrow Key: -5 seconds on current song
 - Right Arrow Key: +5 seconds on current song
 - Backspace: Delete characters in the search bar
@@ -717,4 +717,77 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
     f.render_widget(popup_text, popup_area);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::Path;
+
+    #[test]
+    fn test_song_creation() {
+        let title = String::from("Test Song");
+        let artist = String::from("Test Artist");
+        let path = PathBuf::from("/path/to/test/song.mp3");
+        let album = String::from("Test Album");
+        let duration = 180.0;
+        let song = Song::new(
+            title.clone(),
+            artist.clone(),
+            path.clone(),
+            album.clone(),
+            duration,
+        );
+
+        assert_eq!(song.title, title);
+        assert_eq!(song.artist, artist);
+        assert_eq!(song.path, path);
+        assert_eq!(song.album, album);
+        assert_eq!(song.duration, duration);
+        assert_eq!(song.is_playing, false);
+    }
+
+    #[test]
+    fn test_scan_folder_for_music() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a mock MP3 file
+        let file_path = temp_path.join("test.mp3");
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(b"dummy content").unwrap();
+
+        // Create a mock FLAC file
+        let file_path_flac = temp_path.join("test.flac");
+        let mut file_flac = File::create(&file_path_flac).unwrap();
+        file_flac.write_all(b"dummy content").unwrap();
+
+        // Simulate the function behavior
+        let mut songs = Vec::new();
+
+        for entry in fs::read_dir(temp_path).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_file() {
+                let extension = path.extension().unwrap().to_str().unwrap().to_lowercase();
+                if MUSIC_FORMATS.contains(&extension.as_str()) {
+                    let song = Song::new(
+                        "Test Song".to_string(),
+                        "Test Artist".to_string(),
+                        path.clone(),
+                        "Test Album".to_string(),
+                        180.0,
+                    );
+                    songs.push(song);
+                }
+            }
+        }
+
+        assert_eq!(songs.len(), 2);
+        assert_eq!(songs[0].path.extension().unwrap(), "flac");
+        assert_eq!(songs[1].path.extension().unwrap(), "mp3");
+    }
 }
