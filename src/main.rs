@@ -56,6 +56,10 @@ struct Song {
     is_playing: bool,
 }
 
+struct App {
+
+}
+
 impl Song {
     fn new(title: String, artist: String, path: PathBuf, album: String, duration: f64) -> Self {
         Song {
