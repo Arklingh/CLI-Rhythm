@@ -21,7 +21,7 @@ Preompiled binary is availiable in [Releases](https://github.com/Arklingh/CLI-Rh
 1. Ensure you have Rust installed.
 2. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/cli-rhythm.git
+git clone https://github.com/Arklingh/cli-rhythm.git
 cd cli-rhythm
 ```
 3. Build the application:
