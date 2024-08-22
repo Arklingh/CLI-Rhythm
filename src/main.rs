@@ -3,7 +3,7 @@ extern crate tui;
 
 use std::env;
 use std::io::stdout;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, Sub};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -64,6 +64,30 @@ enum SearchCriteria {
     Album,
 }
 
+enum SortCriteria {
+    Title,
+    Artist,
+    Duration,
+}
+
+impl SortCriteria {
+    fn next(&self) -> SortCriteria {
+        match self {
+            SortCriteria::Title => SortCriteria::Artist,
+            SortCriteria::Artist => SortCriteria::Duration,
+            SortCriteria::Duration => SortCriteria::Title,
+        }
+    }
+
+    fn to_string(&self) -> &str {
+        match self {
+            SortCriteria::Title => "Title",
+            SortCriteria::Artist => "Artist",
+            SortCriteria::Duration => "Duration",
+        }
+    }
+}
+
 struct PopupState {
     visible: bool,
 }
@@ -84,18 +108,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut songs = Box::new(scan_folder_for_music());
 
-    songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
-
     let mut filtered_songs: Vec<&Song>;
+    let mut visible_song_count: usize = 0;
 
     let mut previous_volume = 1.0;
 
     let mut selected_song_index: Option<usize> = None;
 
+    let mut list_offset: usize = 0;
+
     let mut search_text = String::new();
     let mut search_criteria = SearchCriteria::Title;
+    let mut sort_criteria = SortCriteria::Title;
     let mut currently_playing_index: Option<usize> = None;
     let mut song_time: Option<Instant> = None;
+
+    sort_songs(&mut songs, &sort_criteria);
+
+    let mut paused_time: Option<Instant> = None;
 
     let mut popup_state = PopupState { visible: false };
 
@@ -136,28 +166,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect();
 
-        let song_items: Vec<ListItem> = filtered_songs
-            .iter()
-            .enumerate()
-            .map(|(index, song)| {
-                let mut style = Style::default();
-                if selected_song_index.is_some_and(|select| select == index) {
-                    style = Style::default()
-                        .fg(Color::LightBlue)
-                        .add_modifier(Modifier::BOLD);
-                }
-                ListItem::new(song.title.clone()).style(style)
-            })
-            .collect();
-
-        let song_list = List::new(song_items)
-            .block(Block::default().borders(Borders::ALL).title("Songs"))
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            );
-
         let selected_song = match selected_song_index {
             Some(index) => filtered_songs.get(index),
             None => None,
@@ -196,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let progress_ratio =
             match songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0))) {
-                Some(song) if song.duration > 0.0 => {
+                Some(song) if song.duration > 0.0 && !sink.lock().unwrap().is_paused() => {
                     if let Some(song_time) = song_time {
                         let elapsed_time = song_time.elapsed().as_secs_f64().min(song.duration);
                         if elapsed_time >= song.duration {
@@ -209,17 +217,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         0.0
                     }
                 }
+                Some(song) if song.duration > 0.0 && sink.lock().unwrap().is_paused() => {
+                    let mut ratio: f64 = 0.0;
+                    if let Some(song_time) = song_time {
+                        if let Some(paused_time) = paused_time {
+                            let elapsed_time = song_time.elapsed().as_secs_f64().min(song.duration);
+                            ratio = (elapsed_time - paused_time.elapsed().as_secs_f64())
+                                / song.duration;
+                        }
+                    }
+                    ratio
+                }
                 _ => 0.0,
             };
 
         let song_progress = if let Some(song) =
             songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0)))
         {
-            let elapsed_time = song_time
-                .unwrap_or(Instant::now())
-                .elapsed()
-                .as_secs_f64()
-                .min(song.duration);
+            let elapsed_time = if let Some(paused_time) = paused_time {
+                song_time
+                    .unwrap_or(Instant::now())
+                    .elapsed()
+                    .as_secs_f64()
+                    .sub(paused_time.elapsed().as_secs_f64())
+                    .min(song.duration)
+            } else {
+                song_time
+                    .unwrap_or(Instant::now())
+                    .elapsed()
+                    .as_secs_f64()
+                    .min(song.duration)
+            };
             let elapsed_minutes = (elapsed_time / 60.0).floor() as u64;
             let elapsed_seconds = (elapsed_time % 60.0).round() as u64;
             let duration_minutes = (song.duration / 60.0).floor() as u64;
@@ -274,6 +302,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
                 .split(vertical_layout[1]);
 
+            visible_song_count = (chunks[0].height - 2) as usize;
+
+            let song_items: Vec<ListItem> = filtered_songs
+                .iter()
+                .enumerate()
+                .skip(list_offset)
+                .take(visible_song_count as usize)
+                .map(|(index, song)| {
+                    let mut style = Style::default();
+                    if selected_song_index.is_some_and(|select| select == index) {
+                        style = Style::default()
+                            .fg(Color::LightBlue)
+                            .add_modifier(Modifier::BOLD);
+                    }
+                    ListItem::new(song.title.clone()).style(style)
+                })
+                .collect();
+
+            let song_list = List::new(song_items)
+                .block(Block::default().borders(Borders::ALL).title(format!(
+                    "Songs-----------------------------------------------------------------------------------------Sort by: {}",
+                    sort_criteria.to_string()
+                )))
+                .highlight_style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                );
+
             f.render_widget(song_list, chunks[0]);
 
             f.render_widget(selected_song_info, chunks[1]);
@@ -324,11 +381,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if let Some(index) = selected_song_index {
                             if index < filtered_songs.len() - 1 {
                                 selected_song_index = Some(index + 1);
+
+                                // Scroll down if selected index goes out of view
+                                if let Some(selected_index) = selected_song_index {
+                                    if selected_index >= list_offset + visible_song_count - 1 {
+                                        list_offset =
+                                            (selected_index - visible_song_count + 2).max(0);
+
+                                        // Ensure the list_offset does not exceed the maximum allowed offset
+                                        list_offset = (list_offset).min(
+                                            filtered_songs.len().saturating_sub(visible_song_count),
+                                        );
+                                    }
+                                }
                             } else {
                                 selected_song_index = Some(0);
+                                list_offset = 0;
                             }
                         } else if !filtered_songs.is_empty() {
                             selected_song_index = Some(0);
+                            list_offset = 0;
                         }
                     }
                     KeyEvent {
@@ -341,11 +413,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if let Some(index) = selected_song_index {
                             if index > 0 {
                                 selected_song_index = Some(index - 1);
+
+                                // Scroll up if selected index goes out of view
+                                if index <= list_offset {
+                                    list_offset = list_offset.saturating_sub(1);
+                                }
                             } else {
                                 selected_song_index = Some(filtered_songs.len() - 1);
+                                list_offset =
+                                    filtered_songs.len().saturating_sub(visible_song_count);
                             }
                         } else if !filtered_songs.is_empty() {
                             selected_song_index = Some(filtered_songs.len() - 1);
+                            list_offset = filtered_songs.len().saturating_sub(visible_song_count);
                         }
                     }
                     KeyEvent {
@@ -371,8 +451,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     currently_playing_index = None;
 
                                     // Set is_playing field to false
-                                    if let Some(current_index) = currently_playing_index {
-                                        songs[current_index].is_playing = false;
+                                    if let Some(index) = currently_playing_index {
+                                        if songs[index].is_playing {
+                                            if let Some(start_time) = song_time {
+                                                let elapsed_time = start_time
+                                                    .elapsed()
+                                                    .as_secs_f64()
+                                                    .min(songs[index].duration);
+                                                let adjusted_time = if let Some(paused_at) =
+                                                    paused_time
+                                                {
+                                                    elapsed_time + paused_at.elapsed().as_secs_f64()
+                                                } else {
+                                                    elapsed_time
+                                                };
+                                                song_time = Some(
+                                                    start_time
+                                                        + Duration::from_secs_f64(adjusted_time),
+                                                );
+                                            } else {
+                                                song_time = Some(Instant::now());
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -385,11 +485,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         if sink.lock().unwrap().is_paused() {
-                            sink.lock().unwrap().play();
-                            songs[currently_playing_index.unwrap()].is_playing = true;
+                            if let Some(current_index) = currently_playing_index {
+                                sink.lock().unwrap().play();
+                                songs[current_index].is_playing = true;
+                            }
+                            // Calculate elapsed time during the pause
+                            if let Some(paused_at) = paused_time {
+                                let elapsed_during_pause = paused_at.elapsed();
+                                song_time = song_time.map(|t| t + elapsed_during_pause);
+                                paused_time = None;
+                            }
                         } else {
-                            sink.lock().unwrap().pause();
-                            songs[currently_playing_index.unwrap()].is_playing = false;
+                            if let Some(index) = currently_playing_index {
+                                sink.lock().unwrap().pause();
+                                songs[index].is_playing = false;
+                                // Record the time when playback was paused
+                                paused_time = Some(Instant::now());
+                            }
                         }
                     }
                     KeyEvent {
@@ -406,6 +518,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             currently_playing_index = Some(idx);
                             selected_song_index = Some(idx);
                             song_time = Some(Instant::now());
+                            paused_time = None; // Reset paused time when starting a new song
                         }
                     }
                     KeyEvent {
@@ -422,6 +535,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             selected_song_index = Some(idx);
                             currently_playing_index = Some(idx);
                             song_time = Some(Instant::now());
+                            paused_time = None; // Reset paused time when starting a new song
                         }
                     }
                     KeyEvent {
@@ -501,6 +615,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             SearchCriteria::Artist => SearchCriteria::Album,
                             SearchCriteria::Album => SearchCriteria::Title,
                         };
+                    }
+                    KeyEvent {
+                        code: KeyCode::Char('t'),
+                        modifiers: KeyModifiers::CONTROL,
+                        kind: KeyEventKind::Press,
+                        state: KeyEventState::NONE,
+                    } => {
+                        sort_criteria = sort_criteria.next();
+                        sort_songs(&mut songs, &sort_criteria);
                     }
                     KeyEvent {
                         code: KeyCode::Right,
@@ -665,7 +788,7 @@ fn scan_folder_for_music() -> Vec<Song> {
 
     if song_list.is_empty() {
         song_list.push(Song::new(
-            "No songs in current directory!".to_string(),
+            "No songs in \"Music\" and current directory!".to_string(),
             "No Title".to_string(),
             PathBuf::new(),
             Album {
@@ -719,12 +842,29 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
     Ok(())
 }
 
+fn sort_songs(songs: &mut Vec<Song>, criteria: &SortCriteria) {
+    match criteria {
+        SortCriteria::Title => {
+            songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        }
+        SortCriteria::Artist => {
+            songs.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()));
+        }
+        SortCriteria::Duration => {
+            songs.sort_by(|a, b| {
+                a.duration
+                    .partial_cmp(&b.duration)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
-    use std::path::Path;
 
     #[test]
     fn test_song_creation() {
