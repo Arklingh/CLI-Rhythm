@@ -64,6 +64,30 @@ enum SearchCriteria {
     Album,
 }
 
+enum SortCriteria {
+    Title,
+    Artist,
+    Duration,
+}
+
+impl SortCriteria {
+    fn next(&self) -> SortCriteria {
+        match self {
+            SortCriteria::Title => SortCriteria::Artist,
+            SortCriteria::Artist => SortCriteria::Duration,
+            SortCriteria::Duration => SortCriteria::Title,
+        }
+    }
+
+    fn to_string(&self) -> &str {
+        match self {
+            SortCriteria::Title => "Title",
+            SortCriteria::Artist => "Artist",
+            SortCriteria::Duration => "Duration",
+        }
+    }
+}
+
 struct PopupState {
     visible: bool,
 }
@@ -84,8 +108,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut songs = Box::new(scan_folder_for_music());
 
-    songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
-
     let mut filtered_songs: Vec<&Song>;
     let mut visible_song_count: usize = 0;
 
@@ -97,8 +119,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut search_text = String::new();
     let mut search_criteria = SearchCriteria::Title;
+    let mut sort_criteria = SortCriteria::Title;
     let mut currently_playing_index: Option<usize> = None;
     let mut song_time: Option<Instant> = None;
+
+    sort_songs(&mut songs, &sort_criteria);
 
     let mut paused_time: Option<Instant> = None;
 
@@ -296,7 +321,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect();
 
             let song_list = List::new(song_items)
-                .block(Block::default().borders(Borders::ALL).title("Songs"))
+                .block(Block::default().borders(Borders::ALL).title(format!(
+                    "Songs-----------------------------------------------------------------------------------------Sort by: {}",
+                    sort_criteria.to_string()
+                )))
                 .highlight_style(
                     Style::default()
                         .fg(Color::Yellow)
@@ -457,8 +485,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         if sink.lock().unwrap().is_paused() {
-                            sink.lock().unwrap().play();
-                            songs[currently_playing_index.unwrap()].is_playing = true;
+                            if let Some(current_index) = currently_playing_index {
+                                sink.lock().unwrap().play();
+                                songs[current_index].is_playing = true;
+                            }
                             // Calculate elapsed time during the pause
                             if let Some(paused_at) = paused_time {
                                 let elapsed_during_pause = paused_at.elapsed();
@@ -585,6 +615,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             SearchCriteria::Artist => SearchCriteria::Album,
                             SearchCriteria::Album => SearchCriteria::Title,
                         };
+                    }
+                    KeyEvent {
+                        code: KeyCode::Char('t'),
+                        modifiers: KeyModifiers::CONTROL,
+                        kind: KeyEventKind::Press,
+                        state: KeyEventState::NONE,
+                    } => {
+                        sort_criteria = sort_criteria.next();
+                        sort_songs(&mut songs, &sort_criteria);
                     }
                     KeyEvent {
                         code: KeyCode::Right,
@@ -801,6 +840,24 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
     f.render_widget(popup_text, popup_area);
 
     Ok(())
+}
+
+fn sort_songs(songs: &mut Vec<Song>, criteria: &SortCriteria) {
+    match criteria {
+        SortCriteria::Title => {
+            songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        }
+        SortCriteria::Artist => {
+            songs.sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()));
+        }
+        SortCriteria::Duration => {
+            songs.sort_by(|a, b| {
+                a.duration
+                    .partial_cmp(&b.duration)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+    }
 }
 
 #[cfg(test)]
