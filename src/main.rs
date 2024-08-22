@@ -1,3 +1,13 @@
+//! # CLI-Rhythm
+//!
+//! CLI-Rhythm is a terminal-based music player written in Rust, designed for a minimalistic and efficient command-line interface. It allows users to manage and play their music collection directly from the terminal, offering features such as sorting, searching, and playback controls. Built with a focus on simplicity and performance, CLI-Rhythm provides an intuitive experience for music enthusiasts who prefer a text-based environment.
+//!
+//! ## Features
+//! - Play music files from supported formats.
+//! - Sort and search for songs by title, artist, or album.
+//! - Navigate through a list of songs with ease.
+//! - Minimal resource usage with a clean terminal interface.
+
 extern crate crossterm;
 extern crate tui;
 
@@ -26,15 +36,23 @@ use textwrap::wrap;
 use audiotags::{types::Album, Tag};
 use mp3_metadata::read_from_file;
 
+/// Supported music file formats.
 const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
 
+/// Represents a song with metadata.
 #[derive(Debug, PartialEq, PartialOrd, Default, Clone)]
 struct Song {
+    /// Title of the song.
     title: String,
+    /// Artist of the song.
     artist: String,
+    /// File path to the song.
     path: PathBuf,
+    /// Album name of the song.
     album: String,
+    /// Duration of the song in seconds.
     duration: f64,
+    /// Indicates if the song is currently playing.
     is_playing: bool,
 }
 
@@ -64,6 +82,7 @@ enum SearchCriteria {
     Album,
 }
 
+#[derive(PartialEq, Eq, Debug)]
 enum SortCriteria {
     Title,
     Artist,
@@ -631,6 +650,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
+                        // !!!!!!!!!!!!!!!!!!!!!!!! problem during search
                         if let Some(index) = currently_playing_index {
                             let file = fs::File::open(&songs[index].path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
@@ -825,6 +845,7 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
 - Ctrl + P: Pause/Unpause
 - Ctrl + M: Mute/Unmute
 - Ctrl + S: Change search criteria
+- Ctrl + T: Change sorting criteria
 - Ctrl + Left/Right Arrow Keys: Adjust Volume
 - Ctrl + L: Next song
 - Ctrl + H: Previous song
@@ -929,5 +950,70 @@ mod tests {
         assert_eq!(songs.len(), 2);
         assert_eq!(songs[0].path.extension().unwrap(), "flac");
         assert_eq!(songs[1].path.extension().unwrap(), "mp3");
+    }
+
+    #[test]
+    fn test_popup_state_toggle() {
+        let mut popup_state = PopupState { visible: false };
+
+        popup_state.toggle();
+        assert_eq!(popup_state.visible, true);
+
+        popup_state.toggle();
+        assert_eq!(popup_state.visible, false);
+    }
+
+    #[test]
+    fn test_sort_criteria() {
+        assert_eq!(SortCriteria::Title.to_string(), "Title");
+        assert_eq!(SortCriteria::Artist.to_string(), "Artist");
+        assert_eq!(SortCriteria::Duration.to_string(), "Duration");
+
+        assert_eq!(SortCriteria::Title.next(), SortCriteria::Artist);
+        assert_eq!(SortCriteria::Artist.next(), SortCriteria::Duration);
+        assert_eq!(SortCriteria::Duration.next(), SortCriteria::Title);
+    }
+
+    #[test]
+    fn test_search_criteria() {
+        let song1 = Song::new(
+            "Song One".to_string(),
+            "Artist A".to_string(),
+            PathBuf::from("/path/to/song1.mp3"),
+            "Album X".to_string(),
+            200.0,
+        );
+        let song2 = Song::new(
+            "Song Two".to_string(),
+            "Artist B".to_string(),
+            PathBuf::from("/path/to/song2.mp3"),
+            "Album Y".to_string(),
+            220.0,
+        );
+
+        let songs = vec![song1, song2];
+
+        let search_text = "Song".to_string();
+        let search_criteria = SearchCriteria::Title;
+
+        let filtered_songs: Vec<&Song> = songs
+            .iter()
+            .filter(|s| match search_criteria {
+                SearchCriteria::Title => {
+                    s.title.to_lowercase().contains(&search_text.to_lowercase())
+                }
+                SearchCriteria::Artist => s
+                    .artist
+                    .to_lowercase()
+                    .contains(&search_text.to_lowercase()),
+                SearchCriteria::Album => {
+                    s.album.to_lowercase().contains(&search_text.to_lowercase())
+                }
+            })
+            .collect();
+
+        assert_eq!(filtered_songs.len(), 2);
+        assert_eq!(filtered_songs[0].title, "Song One");
+        assert_eq!(filtered_songs[1].title, "Song Two");
     }
 }
