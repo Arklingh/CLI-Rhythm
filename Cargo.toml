@@ -5,7 +5,10 @@ edition = "2021"
 authors = ["Andrii <andriikurochka@ukr.net>"]
 description = "A simple and functional CLI music player."
 readme = "README.md"
+keywords = ["cli", "player", "music", "minimal", "rhythm"]
+categories = ["command-line-utilities", "multimedia::audio"]
 repository = "https://github.com/Arklingh/CLI-Rhythm"
+licence = "Apache-2.0"
 license-file = "LICENSE"
 
 [dependencies]
