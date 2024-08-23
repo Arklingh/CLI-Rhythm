@@ -26,8 +26,8 @@ use rodio::{OutputStream, Sink, Source};
 use tui::backend::CrosstermBackend;
 use tui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
-use tui::text::Text;
-use tui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph};
+use tui::text::{Spans, Text};
+use tui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Tabs};
 use tui::Terminal;
 
 use dirs;
@@ -54,10 +54,6 @@ struct Song {
     duration: f64,
     /// Indicates if the song is currently playing.
     is_playing: bool,
-}
-
-struct App {
-
 }
 
 impl Song {
@@ -143,7 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut search_text = String::new();
     let mut search_criteria = SearchCriteria::Title;
     let mut sort_criteria = SortCriteria::Title;
-    let mut currently_playing_index: Option<usize> = None;
+    let mut currently_playing_song: Option<usize> = None;
     let mut song_time: Option<Instant> = None;
 
     sort_songs(&mut songs, &sort_criteria);
@@ -155,6 +151,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap()));
 
+    let active_tab = 0;
+
     // Run event loop
     loop {
         let search_bar_title = match search_criteria {
@@ -162,6 +160,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             SearchCriteria::Artist => "Search by Artist",
             SearchCriteria::Album => "Search by Album",
         };
+
+        let tabs = Tabs::new(vec![Spans::from("Songs"), Spans::from("Playlists")])
+            .select(active_tab)
+            .block(Block::default().borders(Borders::ALL).title("Tabs"))
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Yellow));
 
         // Render search bar
         let search_bar = Paragraph::new(Text::raw(format!("{}", search_text)))
@@ -218,7 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .style(Style::default().fg(Color::Cyan));
 
-        if let Some(index) = currently_playing_index {
+        if let Some(index) = currently_playing_song {
             if songs[index].is_playing {
                 song_time =
                     Some(song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1));
@@ -226,7 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let progress_ratio =
-            match songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0))) {
+            match songs.get(currently_playing_song.unwrap_or(selected_song_index.unwrap_or(0))) {
                 Some(song) if song.duration > 0.0 && !sink.lock().unwrap().is_paused() => {
                     if let Some(song_time) = song_time {
                         let elapsed_time = song_time.elapsed().as_secs_f64().min(song.duration);
@@ -255,7 +259,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
         let song_progress = if let Some(song) =
-            songs.get(currently_playing_index.unwrap_or(selected_song_index.unwrap_or(0)))
+            songs.get(currently_playing_song.unwrap_or(selected_song_index.unwrap_or(0)))
         {
             let elapsed_time = if let Some(paused_time) = paused_time {
                 song_time
@@ -312,18 +316,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Percentage(10),
-                    Constraint::Percentage(80),
-                    Constraint::Percentage(10),
+                    Constraint::Percentage(8),
+                    Constraint::Percentage(8),
+                    Constraint::Percentage(75),
+                    Constraint::Percentage(8),
                 ])
                 .split(f.size());
 
-            f.render_widget(search_bar, vertical_layout[0]);
+            f.render_widget(tabs, vertical_layout[0]);
+            f.render_widget(search_bar, vertical_layout[1]);
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
-                .split(vertical_layout[1]);
+                .split(vertical_layout[2]);
 
             visible_song_count = (chunks[0].height - 2) as usize;
 
@@ -361,7 +367,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let footer = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
-                .split(vertical_layout[2]);
+                .split(vertical_layout[3]);
 
             f.render_widget(song_progress, footer[0]);
 
@@ -438,7 +444,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 selected_song_index = Some(index - 1);
 
                                 // Scroll up if selected index goes out of view
-                                if index <= list_offset {
+                                if index <= list_offset + 1 {
                                     list_offset = list_offset.saturating_sub(1);
                                 }
                             } else {
@@ -459,22 +465,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } => {
                         if let Some(index) = selected_song_index {
                             if let Some(selected_song) = filtered_songs.get(index) {
-                                if currently_playing_index.is_none()
-                                    || Some(index) != currently_playing_index
+                                if currently_playing_song.is_none()
+                                    || Some(index) != currently_playing_song
                                 {
                                     sink.lock().unwrap().clear();
                                     selected_song.play(&sink);
                                     song_time = Some(Instant::now());
-                                    currently_playing_index = Some(index);
+                                    currently_playing_song = Some(index);
                                     // Set is_playing field to true
                                     songs[index].is_playing = true;
                                 } else {
                                     sink.lock().unwrap().clear();
                                     song_time = None;
-                                    currently_playing_index = None;
+                                    currently_playing_song = None;
 
                                     // Set is_playing field to false
-                                    if let Some(index) = currently_playing_index {
+                                    if let Some(index) = currently_playing_song {
                                         if songs[index].is_playing {
                                             if let Some(start_time) = song_time {
                                                 let elapsed_time = start_time
@@ -508,7 +514,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         if sink.lock().unwrap().is_paused() {
-                            if let Some(current_index) = currently_playing_index {
+                            if let Some(current_index) = currently_playing_song {
                                 sink.lock().unwrap().play();
                                 songs[current_index].is_playing = true;
                             }
@@ -519,7 +525,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 paused_time = None;
                             }
                         } else {
-                            if let Some(index) = currently_playing_index {
+                            if let Some(index) = currently_playing_song {
                                 sink.lock().unwrap().pause();
                                 songs[index].is_playing = false;
                                 // Record the time when playback was paused
@@ -533,12 +539,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if currently_playing_index.is_some_and(|idx| idx > 0) {
-                            let mut idx = currently_playing_index.unwrap();
+                        if currently_playing_song.is_some_and(|idx| idx > 0) {
+                            let mut idx = currently_playing_song.unwrap();
                             idx -= 1;
                             sink.lock().unwrap().clear();
                             songs[idx].play(&sink);
-                            currently_playing_index = Some(idx);
+                            currently_playing_song = Some(idx);
                             selected_song_index = Some(idx);
                             song_time = Some(Instant::now());
                             paused_time = None; // Reset paused time when starting a new song
@@ -550,13 +556,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if currently_playing_index.is_some_and(|idx| idx < songs.len() - 1) {
-                            let mut idx = currently_playing_index.unwrap();
+                        if currently_playing_song.is_some_and(|idx| idx < songs.len() - 1) {
+                            let mut idx = currently_playing_song.unwrap();
                             idx += 1;
                             sink.lock().unwrap().clear();
                             songs[idx].play(&sink);
                             selected_song_index = Some(idx);
-                            currently_playing_index = Some(idx);
+                            currently_playing_song = Some(idx);
                             song_time = Some(Instant::now());
                             paused_time = None; // Reset paused time when starting a new song
                         }
@@ -654,9 +660,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        // !!!!!!!!!!!!!!!!!!!!!!!! problem during search
-                        if let Some(index) = currently_playing_index {
-                            let file = fs::File::open(&songs[index].path).unwrap();
+                        if let Some(index) = currently_playing_song {
+                            let file = fs::File::open(&filtered_songs[index].path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
                             let time = song_time.unwrap().sub(Duration::from_secs(5));
                             song_time = Some(time);
@@ -675,8 +680,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if let Some(index) = currently_playing_index {
-                            let file = fs::File::open(&songs[index].path).unwrap();
+                        if let Some(index) = currently_playing_song {
+                            let file = fs::File::open(&filtered_songs[index].path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
                             let time = song_time.unwrap().add(Duration::from_secs(5));
                             song_time = Some(time);
