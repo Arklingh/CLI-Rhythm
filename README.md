@@ -36,6 +36,12 @@ cargo build --release
 
 cli-rhythm scans your system's default music folder for music files. If it doesn't find any there, it will scan the folder cli-rhythm executable is in.
 
+| Platform | Music folder example |
+| -------- | ------- |
+| Linux | /home/alice/Music |
+| macOS | /Users/Alice/Music |
+| Windows | C:\Users\Alice\Music |
+
 ## Controls
 
 - Use Up/Down Arrow Keys to navigate songs
