@@ -70,6 +70,7 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - [ ] **Lyrics Display**: Add support for displaying lyrics if available in the metadata.
 - [ ] **Streaming Support**: Implement support for streaming music from online sources or services.
 - [ ] **Improved Metadata Handling**: Enhance metadata extraction and display, including album artwork.
+- [ ] **Adaptivity to different screen resolutions**: Ensure app's defined behaviour for different resolutions.
 
 ## License
 
