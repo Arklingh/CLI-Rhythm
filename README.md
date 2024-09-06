@@ -2,7 +2,7 @@
 
 cli-rhythm is a simple, functional, and lightweight Command-Line Interface (CLI) music player. It is designed to provide a seamless music-playing experience directly from your terminal. Built with Rust, it supports intuitive navigation, and a minimal user interface for distraction-free listening.
 
-![зображення](https://github.com/user-attachments/assets/b313abe8-d93d-449f-8997-9886f74bf8f4)
+![зображення](https://github.com/user-attachments/assets/8ace77b3-c124-4bd3-b68a-4258cdcfe6dc)
 
 ## Features
 
@@ -64,6 +64,9 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - Left Arrow Key: -5 seconds on current song
 - Right Arrow Key: +5 seconds on current song
 - Backspace: Delete characters in the search bar
+- Ctrl + A: Select a song to be added to the new playlist
+- Ctrl + C: New playlist name input popup
+- Enter: Create a new playlist with given name
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup
 
