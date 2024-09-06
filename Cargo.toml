@@ -28,3 +28,6 @@ serde_json = "1.0.128"
 [dev-dependencies]
 tempfile = "3.3"
 
+[[bin]]
+name = "cli-rhythm"
+path = "src/main.rs"
