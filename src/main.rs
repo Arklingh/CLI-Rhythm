@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{stdout, Write};
-use std::ops::{Add,  Sub};
+use std::ops::Sub;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -265,11 +265,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut visible_song_count: usize = 0;
     let mut visible_playlist_count: usize = 0;
 
-    let mut selected_song_index: Option<usize> = None;
+    let mut selected_song_id: Option<Uuid> = None;
 
     let mut chosen_song_ids: Vec<Uuid> = vec![];
 
-    let mut currently_playing_song: Option<usize> = None;
+    let mut currently_playing_song: Option<Uuid> = None;
     let mut song_time: Option<Instant> = None;
 
     sort_songs(&mut myapp.songs, &myapp.sort_criteria);
@@ -324,8 +324,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .cloned()
             .collect();
 
-        let selected_song = match selected_song_index {
-            Some(index) => myapp.filtered_songs.get(index),
+        let selected_song = match selected_song_id {
+            Some(index) => myapp.find_song_by_id(index),
             None => None,
         };
 
@@ -353,15 +353,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .style(Style::default().fg(Color::Cyan));
 
-        if let Some(index) = currently_playing_song {
-            if myapp.songs[index].is_playing {
-                song_time =
-                    Some(song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1));
+        if let Some(current_song_id) = currently_playing_song {
+            if let Some(song) = myapp.find_song_by_id(current_song_id) {
+                if song.is_playing {
+                        song_time = Some(song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1));
+                }
             }
         };
 
+        let song_id = currently_playing_song.or(selected_song_id).unwrap_or_else(|| {
+            myapp.songs.first().map(|song| song.id).unwrap_or_default()
+        });
+
         let progress_ratio =
-            match myapp.songs.get(currently_playing_song.unwrap_or(selected_song_index.unwrap_or(0))) {
+            match myapp.find_song_by_id(song_id).cloned() {
                 Some(song) if song.duration > 0.0 && !sink.lock().unwrap().is_paused() => {
                     if let Some(song_time) = song_time {
                         let elapsed_time = song_time.elapsed().as_secs_f64().min(song.duration);
@@ -390,7 +395,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
         let song_progress = if let Some(song) =
-            myapp.songs.get(currently_playing_song.unwrap_or(selected_song_index.unwrap_or(0)))
+            myapp.find_song_by_id(song_id).cloned()
         {
             let elapsed_time = if let Some(paused_time) = myapp.paused_time {
                 song_time
@@ -483,10 +488,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if chosen_song_ids.contains(&myapp.songs[index].id) {
                         style = Style::default().fg(Color::LightRed).add_modifier(Modifier::RAPID_BLINK);
                     }
-                    if selected_song_index.is_some_and(|select| select == index) {
-                        style = Style::default()
-                            .fg(Color::LightBlue)
-                            .add_modifier(Modifier::BOLD);
+                    if let Some(selected_id) = selected_song_id {
+                        if selected_id == song.id {
+                            style = Style::default()
+                                .fg(Color::LightBlue)
+                                .add_modifier(Modifier::BOLD);
+                        }
                     }
                     ListItem::new(song.title.clone()).style(style)
                 })
@@ -576,29 +583,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        // Move selection down
-                        if let Some(index) = selected_song_index {
-                            if index < myapp.filtered_songs.len() - 1 {
-                                selected_song_index = Some(index + 1);
+                        if let Some(selected_id) = selected_song_id {
+                            // Find the index of the currently selected song by Uuid
+                            if let Some(index) = myapp.filtered_songs.iter().position(|song| song.id == selected_id) {
+                                if index < myapp.filtered_songs.len() - 1 {
+                                    let next_song = &myapp.filtered_songs[index + 1];
+                                    selected_song_id = Some(next_song.id);
 
-                                // Scroll down if selected index goes out of view
-                                if let Some(selected_index) = selected_song_index {
-                                    if selected_index >= myapp.list_offset + visible_song_count - 1 {
-                                        myapp.list_offset =
-                                            (selected_index - visible_song_count + 2).max(0);
+                                    // Scroll down if selected index goes out of view
+                                    if let Some(new_index) = myapp.filtered_songs.iter().position(|song| song.id == selected_song_id.unwrap()) {
+                                        if new_index >= myapp.list_offset + visible_song_count - 1 {
+                                            myapp.list_offset = (new_index - visible_song_count + 2).max(0);
 
-                                        // Ensure the list_offset does not exceed the maximum allowed offset
-                                        myapp.list_offset = (myapp.list_offset).min(
-                                            myapp.filtered_songs.len().saturating_sub(visible_song_count),
-                                        );
+                                            // Ensure the list_offset does not exceed the maximum allowed offset
+                                            myapp.list_offset = myapp.list_offset.min(
+                                                myapp.filtered_songs.len().saturating_sub(visible_song_count),
+                                            );
+                                        }
                                     }
+                                } else {
+                                    // Wrap around to the beginning
+                                    let first_song = &myapp.filtered_songs[0];
+                                    selected_song_id = Some(first_song.id);
+                                    myapp.list_offset = 0;
                                 }
-                            } else {
-                                selected_song_index = Some(0);
-                                myapp.list_offset = 0;
                             }
                         } else if !myapp.filtered_songs.is_empty() {
-                            selected_song_index = Some(0);
+                            // Select the first song if none is selected
+                            let first_song = &myapp.filtered_songs[0];
+                            selected_song_id = Some(first_song.id);
                             myapp.list_offset = 0;
                         }
                     }
@@ -608,24 +621,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        // Move selection up
-                        if let Some(index) = selected_song_index {
-                            if index > 0 {
-                                selected_song_index = Some(index - 1);
+                        if let Some(selected_id) = selected_song_id {
+                            // Find the index of the currently selected song by Uuid
+                            if let Some(index) = myapp.filtered_songs.iter().position(|song| song.id == selected_id) {
+                                if index > 0 {
+                                    let previous_song = &myapp.filtered_songs[index - 1];
+                                    selected_song_id = Some(previous_song.id);
 
-                                // Scroll up if selected index goes out of view
-                                if index <= myapp.list_offset + 1 {
-                                    myapp.list_offset = myapp.list_offset.saturating_sub(1);
+                                    // Scroll up if selected index goes out of view
+                                    if index <= myapp.list_offset + 1 {
+                                        myapp.list_offset = myapp.list_offset.saturating_sub(1);
+                                    }
+                                } else {
+                                    // Wrap around to the last song
+                                    let last_song = &myapp.filtered_songs[myapp.filtered_songs.len() - 1];
+                                    selected_song_id = Some(last_song.id);
+                                    myapp.list_offset = myapp.filtered_songs.len().saturating_sub(visible_song_count);
                                 }
-                            } else {
-                                selected_song_index = Some(myapp.filtered_songs.len() - 1);
-                                myapp.list_offset =
-                                    myapp.filtered_songs.len().saturating_sub(visible_song_count);
                             }
                         } else if !myapp.filtered_songs.is_empty() {
-                            selected_song_index = Some(myapp.filtered_songs.len() - 1);
+                            // Select the last song if none is selected
+                            let last_song = &myapp.filtered_songs[myapp.filtered_songs.len() - 1];
+                            selected_song_id = Some(last_song.id);
                             myapp.list_offset = myapp.filtered_songs.len().saturating_sub(visible_song_count);
                         }
+
                     }
                     KeyEvent {
                         code: KeyCode::Char('j'),
@@ -650,7 +670,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             myapp.selected_playlist_index = 0;
                             myapp.playlist_list_offset = 0;
                         }
-                        selected_song_index = None;
+                        selected_song_id = None;
                     }
                     KeyEvent {
                         code: KeyCode::Char('k'),
@@ -671,7 +691,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             myapp.playlist_list_offset =
                                 myapp.playlists.len().saturating_sub(visible_playlist_count);
                         }
-                        selected_song_index = None;
+                        selected_song_id = None;
                     }
                     KeyEvent {
                         code: KeyCode::Char(' '),
@@ -679,45 +699,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if let Some(index) = selected_song_index {
-                            if let Some(selected_song) = myapp.filtered_songs.get(index) {
-                                if currently_playing_song.is_none()
-                                    || Some(index) != currently_playing_song
-                                {
+                        if let Some(selected_id) = selected_song_id {
+                            if let Some(index) = myapp.filtered_songs.iter().position(|song| song.id == selected_id) {
+                                if currently_playing_song.is_none() || Some(selected_id) != currently_playing_song {
                                     sink.lock().unwrap().clear();
+                                    let selected_song = &myapp.filtered_songs[index];
                                     selected_song.play(&sink);
                                     song_time = Some(Instant::now());
-                                    currently_playing_song = Some(index);
+                                    currently_playing_song = Some(selected_id);
+
                                     // Set is_playing field to true
-                                    myapp.songs[index].is_playing = true;
+                                    if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == selected_id) {
+                                        song.is_playing = true;
+                                    }
                                 } else {
+                                    // Stop the currently playing song
                                     sink.lock().unwrap().clear();
                                     song_time = None;
                                     currently_playing_song = None;
 
                                     // Set is_playing field to false
-                                    if let Some(index) = currently_playing_song {
-                                        if myapp.songs[index].is_playing {
-                                            if let Some(start_time) = song_time {
-                                                let elapsed_time = start_time
-                                                    .elapsed()
-                                                    .as_secs_f64()
-                                                    .min(myapp.songs[index].duration);
-                                                let adjusted_time = if let Some(paused_at) =
-                                                    myapp.paused_time
-                                                {
-                                                    elapsed_time + paused_at.elapsed().as_secs_f64()
-                                                } else {
-                                                    elapsed_time
-                                                };
-                                                song_time = Some(
-                                                    start_time
-                                                        + Duration::from_secs_f64(adjusted_time),
-                                                );
-                                            } else {
-                                                song_time = Some(Instant::now());
-                                            }
-                                        }
+                                    if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == selected_id) {
+                                        song.is_playing = false;
+                                    }
+
+                                    // Update song_time if the song was playing
+                                    if let Some(start_time) = song_time {
+                                        let elapsed_time = start_time.elapsed().as_secs_f64().min(
+                                            myapp.songs.iter().find(|s| s.id == selected_id)
+                                                .map_or(0.0, |s| s.duration)
+                                        );
+                                        let adjusted_time = if let Some(paused_at) = myapp.paused_time {
+                                            elapsed_time + paused_at.elapsed().as_secs_f64()
+                                        } else {
+                                            elapsed_time
+                                        };
+                                        song_time = Some(start_time + Duration::from_secs_f64(adjusted_time));
+                                    } else {
+                                        song_time = Some(Instant::now());
                                     }
                                 }
                             }
@@ -730,22 +749,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         if sink.lock().unwrap().is_paused() {
-                            if let Some(current_index) = currently_playing_song {
-                                sink.lock().unwrap().play();
-                                myapp.songs[current_index].is_playing = true;
-                            }
-                            // Calculate elapsed time during the pause
-                            if let Some(paused_at) = myapp.paused_time {
-                                let elapsed_during_pause = paused_at.elapsed();
-                                song_time = song_time.map(|t| t + elapsed_during_pause);
-                                myapp.paused_time = None;
+                            if let Some(current_id) = currently_playing_song {
+                                if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
+                                    sink.lock().unwrap().play();
+                                    song.is_playing = true;
+                                }
+                                // Calculate elapsed time during the pause
+                                if let Some(paused_at) = myapp.paused_time {
+                                    let elapsed_during_pause = paused_at.elapsed();
+                                    song_time = song_time.map(|t| t + elapsed_during_pause);
+                                    myapp.paused_time = None;
+                                }
                             }
                         } else {
-                            if let Some(index) = currently_playing_song {
-                                sink.lock().unwrap().pause();
-                                myapp.songs[index].is_playing = false;
-                                // Record the time when playback was paused
-                                myapp.paused_time = Some(Instant::now());
+                            if let Some(current_id) = currently_playing_song {
+                                if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
+                                    sink.lock().unwrap().pause();
+                                    song.is_playing = false;
+                                    // Record the time when playback was paused
+                                    myapp.paused_time = Some(Instant::now());
+                                }
                             }
                         }
                     }
@@ -763,32 +786,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if currently_playing_song.is_some_and(|idx| idx > 0) {
-                            let mut idx = currently_playing_song.unwrap();
-                            idx -= 1;
-                            sink.lock().unwrap().clear();
-                            myapp.songs[idx].play(&sink);
-                            currently_playing_song = Some(idx);
-                            selected_song_index = Some(idx);
-                            song_time = Some(Instant::now());
-                            myapp.paused_time = None; // Reset paused time when starting a new song
+                        if let Some(current_id) = currently_playing_song {
+                            if let Some(current_index) = myapp.songs.iter().position(|song| song.id == current_id) {
+                                if current_index > 0 {
+                                    let previous_id = myapp.songs[current_index - 1].id;
+                                    sink.lock().unwrap().clear();
+                                    if let Some(previous_song) = myapp.songs.iter().find(|song| song.id == previous_id) {
+                                        previous_song.play(&sink);
+                                        currently_playing_song = Some(previous_id);
+                                        selected_song_id = Some(previous_id);
+                                        song_time = Some(Instant::now());
+                                        myapp.paused_time = None; // Reset paused time when starting a new song
+                                    }
+                                }
+                            }
                         }
-                    }
+                   }
                     KeyEvent {
                         code: KeyCode::Char('l'),
                         modifiers: KeyModifiers::CONTROL,
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if currently_playing_song.is_some_and(|idx| idx < myapp.songs.len() - 1) {
-                            let mut idx = currently_playing_song.unwrap();
-                            idx += 1;
-                            sink.lock().unwrap().clear();
-                            myapp.songs[idx].play(&sink);
-                            selected_song_index = Some(idx);
-                            currently_playing_song = Some(idx);
-                            song_time = Some(Instant::now());
-                            myapp.paused_time = None; // Reset paused time when starting a new song
+                        if let Some(current_id) = currently_playing_song {
+                            if let Some(current_index) = myapp.songs.iter().position(|song| song.id == current_id) {
+                                if current_index < myapp.songs.len() - 1 {
+                                    let next_id = myapp.songs[current_index + 1].id;
+                                    sink.lock().unwrap().clear();
+                                    if let Some(next_song) = myapp.songs.iter().find(|song| song.id == next_id) {
+                                        next_song.play(&sink);
+                                        selected_song_id = Some(next_id);
+                                        currently_playing_song = Some(next_id);
+                                        song_time = Some(Instant::now());
+                                        myapp.paused_time = None; // Reset paused time when starting a new song
+                                    }
+                                }
+                            }
                         }
                     }
                     KeyEvent {
@@ -895,17 +928,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if let Some(index) = currently_playing_song {
-                            let file = fs::File::open(&myapp.filtered_songs[index].path).unwrap();
-                            let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                            let time = song_time.unwrap().sub(Duration::from_secs(5));
-                            song_time = Some(time);
-                            let source = source.skip_duration(time.elapsed());
-                            sink.lock().unwrap().clear();
-                            sink.lock().unwrap().append(source);
-                            sink.lock().unwrap().play();
-                            if !&myapp.songs[index].is_playing {
-                                sink.lock().unwrap().pause();
+                        if let Some(current_id) = currently_playing_song {
+                            if let Some(current_song) = myapp.songs.iter().find(|song| song.id == current_id) {
+                                let file = fs::File::open(&current_song.path).unwrap();
+                                let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+        
+                                let time = song_time.unwrap_or_else(Instant::now).elapsed().saturating_add(Duration::from_secs(5));
+                                song_time = Some(Instant::now() - time);
+        
+                                let source = source.skip_duration(time);
+        
+                                let sink = sink.lock().unwrap();
+                                sink.clear();
+                                sink.append(source);
+                                sink.play();
+        
+                                if !current_song.is_playing {
+                                    sink.pause();
+                                }
                             }
                         }
                     }
@@ -915,17 +955,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        if let Some(index) = currently_playing_song {
-                            let file = fs::File::open(&myapp.filtered_songs[index].path).unwrap();
-                            let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                            let time = song_time.unwrap().add(Duration::from_secs(5));
-                            song_time = Some(time);
-                            let source = source.skip_duration(time.elapsed());
-                            sink.lock().unwrap().clear();
-                            sink.lock().unwrap().append(source);
-                            sink.lock().unwrap().play();
-                            if !&myapp.songs[index].is_playing {
-                                sink.lock().unwrap().pause();
+                        if let Some(current_id) = currently_playing_song {
+                            if let Some(current_song) = myapp.songs.iter().find(|song| song.id == current_id) {
+                                let file = fs::File::open(&current_song.path).unwrap();
+                                let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+        
+                                let time = song_time.unwrap_or_else(Instant::now).sub(Duration::from_secs(5));
+                                song_time = Some(time);
+        
+                                 let elapsed_duration = time.elapsed();
+                                let source = source.skip_duration(elapsed_duration);
+        
+                                let sink = sink.lock().unwrap();
+                                sink.clear();
+                                sink.append(source);
+                                sink.play();
+        
+                                if !current_song.is_playing {
+                                    sink.pause();
+                                }
                             }
                         }
                     }
@@ -964,14 +1012,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
-                        match chosen_song_ids.contains(&myapp.filtered_songs[selected_song_index.unwrap_or(0)].id) {
+                        let selected_song_id = selected_song_id.unwrap_or(Uuid::new_v5(&Uuid::NAMESPACE_DNS, b"rust-lang.org"));
+                        match chosen_song_ids.contains(&selected_song_id) {
                             true => {
-                                chosen_song_ids.retain(|id| *id != myapp.filtered_songs[selected_song_index.unwrap_or(0)].id);                            
+                                chosen_song_ids.retain(|id| *id != selected_song_id);                            
                             },
                             false => {
-                                chosen_song_ids.push(myapp.filtered_songs[selected_song_index.unwrap_or(0)].id);
+                                chosen_song_ids.push(selected_song_id);
                             }
-                        };
+                        }
                     }
                     KeyEvent {
                         code: KeyCode::Char('x'),
