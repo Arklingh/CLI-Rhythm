@@ -21,6 +21,9 @@ rodio = "0.17.3"
 tempfile = "3.10.1"
 textwrap = "0.16.1"
 tui = "0.19.0"
+uuid = { version = "1.10.0", features = ["serde", "v5"] }
+serde = { version = "1.0.209", features = ["derive"] }
+serde_json = "1.0.128"
 
 [dev-dependencies]
 tempfile = "3.3"

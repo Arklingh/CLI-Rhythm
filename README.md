@@ -69,7 +69,7 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 
 ## Planned Features
 
-- [ ] **Creating Playlists**: Allow users to group song by preference.
+- [x] **Creating Playlists**: Allow users to group song by preference.
 - [ ] **Support for Additional File Formats**: Extend compatibility to more audio formats such as AAC, OGG, and AIFF.
 - [ ] **Equalizer Support**: Implement an equalizer to adjust audio frequencies for a more customized listening experience.
 - [ ] **Configurable Key Bindings**: Allow users to customize keyboard shortcuts according to their preferences.
