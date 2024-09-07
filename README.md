@@ -66,13 +66,11 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 
 - [x] **Creating Playlists**: Allow users to group song by preference.
 - [ ] **Support for Additional File Formats**: Extend compatibility to more audio formats such as AAC, OGG, and AIFF.
-- [ ] **Equalizer Support**: Implement an equalizer to adjust audio frequencies for a more customized listening experience.
+- [ ] **Shuffle & Repeat Modes**: Add options for shuffling songs in a playlist or repeating a song/playlist.
+- [ ] **Visualizer**: Create a simple audio visualizer that reacts to music in the terminal using ASCII art or symbols.
+- [ ] **Notifications**: Show notifications when a song changes, pauses, or resumes, even if the user is in another terminal window.
 - [ ] **Configurable Key Bindings**: Allow users to customize keyboard shortcuts according to their preferences.
 - [ ] **Cross-Platform Support**: Ensure the application runs smoothly on Windows, macOS, and Linux.
-- [ ] **Advanced Playlist Management**: Enhance playlist functionality with features like shuffle, repeat, and smart playlists.
-- [ ] **Lyrics Display**: Add support for displaying lyrics if available in the metadata.
-- [ ] **Streaming Support**: Implement support for streaming music from online sources or services.
-- [ ] **Improved Metadata Handling**: Enhance metadata extraction and display, including album artwork.
 - [ ] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
 
 ## License
