@@ -125,7 +125,7 @@ pub struct MyApp {
     songs: Box<Vec<Song>>,                    // List of all songs
     filtered_songs: Vec<Song>,
     sink: Arc<Mutex<Sink>>,
-    selected_song_index: Option<Uuid>,  // Index of the currently selected song
+    selected_song_id: Option<Uuid>,  // Index of the currently selected song
     currently_playing_song: Option<Uuid>, // Index of the currently playing song
     search_criteria: SearchCriteria,     // Criteria to filter/search songs
     sort_criteria: SortCriteria,         // Criteria to sort songs
@@ -140,7 +140,6 @@ pub struct MyApp {
     playlist_list_offset: usize,
     paused_time: Option<Instant>,
     chosen_song_ids: Vec<Uuid>,
-    selected_song_id: Option<Uuid>,
     song_time: Option<Instant>,
 }
 
@@ -152,7 +151,7 @@ impl MyApp {
             songs: Box::new(Vec::new()),
             filtered_songs: Vec::new(), 
             sink: Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap())),
-            selected_song_index: None,
+            selected_song_id: None,
             currently_playing_song: None,
             search_criteria: SearchCriteria::Title,
             sort_criteria: SortCriteria::Title,
@@ -167,7 +166,6 @@ impl MyApp {
             playlist_list_offset: 0,
             paused_time: None,
             chosen_song_ids: vec![],
-            selected_song_id: None,
             song_time: None,
         }
     }
@@ -182,7 +180,7 @@ impl MyApp {
 
     // Function to handle song selection
     pub fn select_song(&mut self, index: Uuid) {
-        self.selected_song_index = Some(index);
+        self.selected_song_id = Some(index);
     }
 
     fn find_song_by_id(&mut self, id: Uuid) -> Option<&mut Song> {
@@ -191,7 +189,7 @@ impl MyApp {
 
     // Function to play a song
     pub fn play_song(&mut self) {
-        if let Some(index) = self.selected_song_index {
+        if let Some(index) = self.selected_song_id {
             self.currently_playing_song = Some(index);
             let song = self.find_song_by_id(index).unwrap().clone();
             song.play(&self.sink);
@@ -352,7 +350,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             wrapped_details.join("\n")
         } else {
-            "No song selected".to_string()
+            "No song playing".to_string()
         };
         
 
@@ -362,22 +360,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .borders(Borders::ALL)
                     .title("Selected Song"),
             )
-            .style(Style::default());
+            .style(Style::default().fg(Color::White));
 
         let playing_song_info = Paragraph::new(playing_song_details)
             .block(
                 Block::default().borders(Borders::ALL)
                 .title("Playing Song")
             )
-            .style(Style::default());
+            .style(Style::default().fg(Color::White));
 
+        // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
-            if let Some(song) = myapp.find_song_by_id(current_song_id) {
+            if let Some(song) = myapp.find_song_by_id(current_song_id).cloned() {
                 if song.is_playing {
-                        myapp.song_time = Some(myapp.song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1));
+                    // Update song time
+                    myapp.song_time = Some(myapp.song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1));
+
+                    // If the song is finished, play the next one
+                    if myapp.song_time.unwrap().elapsed().as_secs_f64() >= song.duration {
+                        let next_index = myapp
+                            .filtered_songs
+                            .iter()
+                            .position(|s| s.id == current_song_id)
+                            .map(|idx| (idx + 1) % myapp.filtered_songs.len())
+                            .unwrap_or(0);
+
+                        myapp.currently_playing_song = None;
+                        myapp.song_time = None;
+                        if let Some(current_song) = myapp.find_song_by_id(current_song_id) {
+                            current_song.is_playing = false;
+                        }
+                        
+                        // Play the next song
+                        let next_song = myapp.find_song_by_id(myapp.filtered_songs[next_index].id).cloned();
+                        if let Some(song) = next_song {
+                            let file = fs::File::open(&song.path).unwrap();
+                            let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+                            myapp.song_time = Some(Instant::now());
+                            myapp.currently_playing_song = Some(myapp.filtered_songs[next_index].id);
+                            myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
+                            myapp.paused_time = None;
+                            myapp.filtered_songs[next_index].is_playing = true;
+                            sink.lock().unwrap().clear();
+                            sink.lock().unwrap().append(source);
+                            sink.lock().unwrap().play();
+                        }
+                    }
                 }
             }
-        };
+        }
 
         let song_id = myapp.currently_playing_song.or(myapp.selected_song_id).unwrap_or_else(|| {
             myapp.songs.first().map(|song| song.id).unwrap_or_default()
@@ -958,9 +989,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 sink.append(source);
                                 sink.play();
         
-                                if !current_song.is_playing {
+                                /* if !current_song.is_playing {
                                     sink.pause();
-                                }
+                                } */
                             }
                         }
                     }
@@ -975,7 +1006,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let file = fs::File::open(&current_song.path).unwrap();
                                 let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
         
-                                let time = myapp.song_time.unwrap_or_else(Instant::now).elapsed().sub(Duration::from_secs(5));
+                                let time = myapp.song_time.unwrap_or_else(Instant::now).elapsed().saturating_sub(Duration::from_secs(5));
                                 myapp.song_time = Some(Instant::now() - time);
         
                                 let source = source.skip_duration(time);
@@ -984,7 +1015,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 sink.clear();
                                 sink.append(source);
                                 sink.play();
-        
+
                                 if !current_song.is_playing {
                                     sink.pause();
                                 }
