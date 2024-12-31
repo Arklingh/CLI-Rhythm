@@ -37,6 +37,7 @@ use textwrap::wrap;
 use audiotags::{types::Album, Tag };
 use mp3_metadata::read_from_file;
 use uuid::Uuid;
+use notify_rust::Notification;
 
 /// Supported music file formats.
 const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
@@ -259,7 +260,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => {}
     }
     myapp.load_songs();
-
+    
     let mut visible_song_count: usize = 0;
     let mut visible_playlist_count: usize = 0;
 
@@ -372,12 +373,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
             if let Some(song) = myapp.find_song_by_id(current_song_id).cloned() {
-                if song.is_playing {
+                if song.is_playing {                
                     // Update song time
                     myapp.song_time = Some(myapp.song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1));
 
                     // If the song is finished, play the next one
                     if myapp.song_time.unwrap().elapsed().as_secs_f64() >= song.duration {
+                       
+                        if let Some(current_song) = myapp.find_song_by_id(current_song_id) {
+                            current_song.is_playing = false;
+                        } 
+                       
                         let next_index = myapp
                             .filtered_songs
                             .iter()
@@ -385,14 +391,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .map(|idx| (idx + 1) % myapp.filtered_songs.len())
                             .unwrap_or(0);
 
-                        myapp.currently_playing_song = None;
-                        myapp.song_time = None;
-                        if let Some(current_song) = myapp.find_song_by_id(current_song_id) {
-                            current_song.is_playing = false;
-                        }
-                        
                         // Play the next song
                         let next_song = myapp.find_song_by_id(myapp.filtered_songs[next_index].id).cloned();
+
                         if let Some(song) = next_song {
                             let file = fs::File::open(&song.path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
@@ -400,10 +401,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             myapp.currently_playing_song = Some(myapp.filtered_songs[next_index].id);
                             myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
                             myapp.paused_time = None;
-                            myapp.filtered_songs[next_index].is_playing = true;
+                            myapp.filtered_songs[next_index].is_playing = true;                // !!!!!BIG PROBLEMO!!!!
                             sink.lock().unwrap().clear();
                             sink.lock().unwrap().append(source);
                             sink.lock().unwrap().play();
+
+                            send_notification(&format!("Now playing - {} by {}", song.title, song.artist));
                         }
                     }
                 }
@@ -799,12 +802,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
                                     sink.lock().unwrap().play();
                                     song.is_playing = true;
+                                    send_notification(&format!("Playing: {} - {}", song.title, song.artist));
+                                    
                                 }
                                 // Calculate elapsed time during the pause
                                 if let Some(paused_at) = myapp.paused_time {
                                     let elapsed_during_pause = paused_at.elapsed();
                                     myapp.song_time = myapp.song_time.map(|t| t + elapsed_during_pause);
                                     myapp.paused_time = None;
+
                                 }
                             }
                         } else {
@@ -814,6 +820,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     song.is_playing = false;
                                     // Record the time when playback was paused
                                     myapp.paused_time = Some(Instant::now());
+                                    send_notification(&format!("Paused: {} - {}", song.title, song.artist));
                                 }
                             }
                         }
@@ -1016,9 +1023,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 sink.append(source);
                                 sink.play();
 
-                                if !current_song.is_playing {
+                                /* if !current_song.is_playing {
                                     sink.pause();
-                                }
+                                } */
                             }
                         }
                     }
@@ -1029,6 +1036,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         myapp.hint_popup_state.toggle();
+                        let cur_playing: Vec<&Song> = myapp
+                            .filtered_songs
+                            .iter()
+                            .filter(|x| x.is_playing)
+                            .collect();
+
+                        dbg!(cur_playing);
+                        
                     }
                     KeyEvent {
                         code: KeyCode::Esc,
@@ -1311,6 +1326,15 @@ fn sort_songs(songs: &mut Vec<Song>, criteria: &SortCriteria) {
             });
         }
     }
+}
+
+fn send_notification(message: &str) {
+    Notification::new()
+        .summary("CLI-Rhythm")
+        .body(message)
+        .icon("music")
+        .show()
+        .unwrap();
 }
 
 #[cfg(test)]
