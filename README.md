@@ -73,6 +73,11 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - [ ] **Cross-Platform Support**: Ensure the application runs smoothly on Windows, macOS, and Linux.
 - [ ] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
 
+## Known Issues
+- The song names, which overlap with the controls pop-up are not hidden and lower text comprehension
+- Fast consecutive song's volume and progress changes move the progress bar back.   
+- If you encounter any problems, please [open an issue](https://github.com/Arklingh/CLI-Rhythm/issues).
+
 ## License
 
 This project is licensed under the Apache License 2.0. 
