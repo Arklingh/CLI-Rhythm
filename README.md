@@ -56,9 +56,13 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - Left Arrow Key: -5 seconds on current song
 - Right Arrow Key: +5 seconds on current song
 - Backspace: Delete characters in the search bar
-- Ctrl + A: Select a song to be added to the new playlist
+- Ctrl + A: Select a song to be added
+ to the new playlist
 - Ctrl + C: New playlist name input popup
+- Ctrl + K: Move playlist selection up
+- Ctrl + J: Move playlist selection down
 - Enter: Create a new playlist with given name
+- Ctrl + X: Delete selected playlist
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup
 
