@@ -61,6 +61,14 @@ struct Song {
 }
 
 impl Song {
+    /// Creates a new `Song` instance.
+    ///
+    /// # Arguments
+    /// * `title` - The title of the song.
+    /// * `artist` - The artist of the song.
+    /// * `path` - The file path to the song.
+    /// * `album` - The album name of the song.
+    /// * `duration` - The duration of the song in seconds.
     fn new(title: String, artist: String, path: PathBuf, album: String, duration: f64) -> Self {
         Song {
             id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, path.to_str().unwrap().as_bytes()),
@@ -72,7 +80,11 @@ impl Song {
             is_playing: false,
         }
     }
-
+    
+    /// Plays the song using the provided `Sink`.
+    ///
+    /// # Arguments
+    /// * `sink` - The `Sink` to play the song through.
     fn play(&self, sink: &Arc<Mutex<Sink>>) {
         let file = fs::File::open(&self.path).unwrap();
         let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
@@ -81,12 +93,14 @@ impl Song {
     }
 }
 
+/// Enum representing the criteria for searching songs.
 enum SearchCriteria {
     Title,
     Artist,
     Album,
 }
 
+/// Enum representing the criteria for sorting songs.
 #[derive(PartialEq, Eq, Debug)]
 enum SortCriteria {
     Title,
@@ -95,6 +109,7 @@ enum SortCriteria {
 }
 
 impl SortCriteria {
+    /// Returns the next sorting criteria in the sequence.
     fn next(&self) -> SortCriteria {
         match self {
             SortCriteria::Title => SortCriteria::Artist,
@@ -103,6 +118,7 @@ impl SortCriteria {
         }
     }
 
+    /// Converts the sorting criteria to a string representation.
     fn to_string(&self) -> &str {
         match self {
             SortCriteria::Title => "Title",
@@ -122,6 +138,7 @@ impl PopupState {
     }
 }
 
+/// The main application struct.
 pub struct MyApp {
     songs: Box<Vec<Song>>,                    // List of all songs
     filtered_songs: Vec<Song>,
@@ -222,6 +239,10 @@ impl MyApp {
         sort_songs(&mut self.songs, &self.sort_criteria);
     }
 
+    /// Saves the current playlists to a file.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or failure.
     fn save_playlist(&self) -> std::io::Result<()> {
         let serialized = serde_json::to_string(&self.playlists)?;
         
@@ -238,6 +259,13 @@ impl MyApp {
         Ok(())
     }
 
+    /// Loads playlists from a file.
+    ///
+    /// # Arguments
+    /// * `filepath` - The path to the file containing the playlists.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or failure.
     pub fn load_playlists(&mut self, filepath: &str) -> std::io::Result<()> {
         let file = File::open(filepath)?;
         let playlists: HashMap<String, Vec<Uuid>> = serde_json::from_reader(file)?;
@@ -507,7 +535,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Percentage(8),
+                    Constraint::Length(3),
                     Constraint::Percentage(83),
                     Constraint::Percentage(8),
                 ])
@@ -701,7 +729,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     KeyEvent {
                         code: KeyCode::Char('j'),
-                        modifiers: KeyModifiers::NONE,
+                        modifiers: KeyModifiers::CONTROL,
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
@@ -726,7 +754,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     KeyEvent {
                         code: KeyCode::Char('k'),
-                        modifiers: KeyModifiers::NONE,
+                        modifiers: KeyModifiers::CONTROL,
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
@@ -1041,13 +1069,12 @@ myapp.search_text.push(c);
                         state: KeyEventState::NONE,
                     } => {
                         myapp.hint_popup_state.toggle();
-                        let cur_playing: Vec<&Song> = myapp
+                        /* let cur_playing: Vec<&Song> = myapp
                             .filtered_songs
                             .iter()
                             .filter(|x| x.is_playing)
                             .collect();
-
-                        dbg!(cur_playing);
+                        dbg!(cur_playing); */
                     }
                     KeyEvent {
                         code: KeyCode::Esc,
@@ -1234,7 +1261,7 @@ fn scan_folder_for_music() -> Vec<Song> {
 fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io::Error> {
     let size = f.size();
     let popup_width = size.width / 3;
-    let popup_height = size.height / 3 + 5;
+    let popup_height = size.height / 3 + 7;
     let popup_area = Rect::new(
         (size.width - popup_width) / 2,
         (size.height - popup_height) / 2,
@@ -1261,6 +1288,8 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
 - Ctrl + A: Select a song to be added
  to the new playlist
 - Ctrl + C: New playlist name input popup
+- Ctrl + K: Move playlist selection up
+- Ctrl + J: Move playlist selection down
 - Enter: Create a new playlist with given name
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup",
