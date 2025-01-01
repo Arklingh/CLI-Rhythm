@@ -1,22 +1,59 @@
-name: Rust
+name: Build Executables
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "master" ]
-
-env:
-  CARGO_TERM_COLOR: always
+    branches:
+      - main
 
 jobs:
   build:
-
-    runs-on: windows-latest
-
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up environment
+        run: |
+          # Install dependencies or set up the build environment
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential cmake
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            brew update
+            brew install cmake
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          fi
+
+      - name: Build the project
+        run: |
+          mkdir build
+          cd build
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            cmake -G "MinGW Makefiles" ..
+            mingw32-make
+          else
+            cmake ..
+            make
+          fi
+
+      - name: Archive the executable
+        run: |
+          mkdir -p artifacts
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            cp my_app.exe artifacts/my_app-${{ matrix.os }}.exe
+          else
+            cp my_app artifacts/my_app-${{ matrix.os }}
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: my_app-${{ matrix.os }}
+          path: artifacts/my_app-${{ matrix.os }}*
