@@ -75,7 +75,7 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - [x] **Notifications**: Show notifications when a song changes, pauses, or resumes, even if the user is in another terminal window.
 - [ ] **Configurable Key Bindings**: Allow users to customize keyboard shortcuts according to their preferences.
 - [ ] **Cross-Platform Support**: Ensure the application runs smoothly on Windows, macOS, and Linux.
-- [ ] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
+- [x] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
 
 ## Known Issues
 - The song names, which overlap with the controls pop-up are not hidden and lower text comprehension
