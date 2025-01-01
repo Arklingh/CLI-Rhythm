@@ -11,7 +11,7 @@
 extern crate crossterm;
 extern crate tui;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, /* HashMap */};
 use std::env;
 use std::fs::File;
 use std::io::{stdout, Write};
@@ -151,7 +151,7 @@ pub struct MyApp {
     playlist_input_popup: PopupState,
     selected_playlist_index: usize,
     playlist_name_input: String,         // Input buffer for the playlist name
-    playlists: HashMap<String, Vec<Uuid>>, // Playlists with song indices
+    playlists: BTreeMap<String, Vec<Uuid>>, // Playlists with song indices
     search_text: String,
     previous_volume: f32,
     list_offset: usize,
@@ -177,7 +177,7 @@ impl MyApp {
             hint_popup_state: PopupState { visible: false },
             playlist_input_popup : PopupState {visible: false},
             playlist_name_input: String::new(),
-            playlists: HashMap::new(),
+            playlists: BTreeMap::new(),
             search_text: String::new(),
             previous_volume: 0.0,
             list_offset: 0,
@@ -268,7 +268,7 @@ impl MyApp {
     /// A `Result` indicating success or failure.
     pub fn load_playlists(&mut self, filepath: &str) -> std::io::Result<()> {
         let file = File::open(filepath)?;
-        let playlists: HashMap<String, Vec<Uuid>> = serde_json::from_reader(file)?;
+        let playlists: BTreeMap<String, Vec<Uuid>> = serde_json::from_reader(file)?;
         self.playlists = playlists;
         Ok(())
     }
@@ -868,11 +868,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         if let Some(current_id) = myapp.currently_playing_song {
-                            if let Some(current_index) = myapp.songs.iter().position(|song| song.id == current_id) {
+                            if let Some(current_index) = myapp.filtered_songs.iter().position(|song| song.id == current_id) {
                                 if current_index > 0 {
-                                    let previous_id = myapp.songs[current_index - 1].id;
+                                    let previous_id = myapp.filtered_songs[current_index - 1].id;
                                     sink.lock().unwrap().clear();
-                                    if let Some(previous_song) = myapp.songs.iter().find(|song| song.id == previous_id) {
+                                    if let Some(previous_song) = myapp.filtered_songs.iter().find(|song| song.id == previous_id) {
                                         previous_song.play(&sink);
                                         myapp.currently_playing_song = Some(previous_id);
                                         myapp.selected_song_id = Some(previous_id);
@@ -890,11 +890,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         state: KeyEventState::NONE,
                     } => {
                         if let Some(current_id) = myapp.currently_playing_song {
-                            if let Some(current_index) = myapp.songs.iter().position(|song| song.id == current_id) {
-                                if current_index < myapp.songs.len() - 1 {
-                                    let next_id = myapp.songs[current_index + 1].id;
+                            if let Some(current_index) = myapp.filtered_songs.iter().position(|song| song.id == current_id) {
+                                if current_index < myapp.filtered_songs.len() - 1 {
+                                    let next_id = myapp.filtered_songs[current_index + 1].id;
                                     sink.lock().unwrap().clear();
-                                    if let Some(next_song) = myapp.songs.iter().find(|song| song.id == next_id) {
+                                    if let Some(next_song) = myapp.filtered_songs.iter().find(|song| song.id == next_id) {
                                         next_song.play(&sink);
                                         myapp.selected_song_id = Some(next_id);
                                         myapp.currently_playing_song = Some(next_id);
@@ -1256,7 +1256,7 @@ fn scan_folder_for_music() -> Vec<Song> {
 fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io::Error> {
     let size = f.size();
     let popup_width = size.width / 3;
-    let popup_height = size.height / 3 + 7;
+    let popup_height = size.height / 3 + 8;
     let popup_area = Rect::new(
         (size.width - popup_width) / 2,
         (size.height - popup_height) / 2,
@@ -1286,6 +1286,7 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
 - Ctrl + K: Move playlist selection up
 - Ctrl + J: Move playlist selection down
 - Enter: Create a new playlist with given name
+- Ctrl + X: Delete selected playlist
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup",
     )
