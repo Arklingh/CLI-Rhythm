@@ -11,7 +11,7 @@
 extern crate crossterm;
 extern crate ratatui;
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
 use std::io::{stdout, Write};
@@ -44,7 +44,7 @@ use image::{self, load_from_memory_with_format, DynamicImage, ImageBuffer, Image
 const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
 
 /// Represents a song with metadata.
-#[derive(/* PartialEq, PartialOrd, Default, */ Clone)]
+#[derive(Clone)]
 struct Song {
     id: Uuid,
     /// Title of the song.
@@ -61,27 +61,6 @@ struct Song {
     duration: f64,
     /// Indicates if the song is currently playing.
     is_playing: bool,
-}
-
-struct AudioVisualizer {
-    buffer: VecDeque<f32>,
-    buffer_size: usize,
-}
-
-impl AudioVisualizer {
-    fn new(buffer_size: usize) -> Self {
-        Self {
-            buffer: VecDeque::with_capacity(buffer_size),
-            buffer_size,
-        }
-    }
-
-    fn update(&mut self, amplitude: f32) {
-        if self.buffer.len() >= self.buffer_size {
-            self.buffer.pop_front();
-        }
-        self.buffer.push_back(amplitude);
-    }
 }
 
 impl Song {
@@ -121,15 +100,13 @@ impl Song {
 #[derive(Debug)]
 enum Tabs {
     Songs,
-    Visualizer,
     Settings,
 }
 
 impl Tabs {
     fn next(&self) -> Tabs {
         match self {
-            Tabs::Songs => Tabs::Visualizer,
-            Tabs::Visualizer => Tabs::Settings,
+            Tabs::Songs => Tabs::Settings,
             Tabs::Settings => Tabs::Songs,
         }
     }
@@ -139,7 +116,6 @@ impl ToString for Tabs {
     fn to_string(&self) -> String {
         match self {
             Tabs::Songs => "Songs".to_string(),
-            Tabs::Visualizer => "Visualizer".to_string(),
             Tabs::Settings => "Settings".to_string(),
         }
     }
@@ -467,14 +443,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "No song playing".to_string()
         };
 
-        let short_playing_song_details = if let Some(song_id) = myapp.currently_playing_song {
-            let song = myapp.find_song_by_id(song_id).unwrap();
-            format!("{} - {}", song.artist, song.title)
-        } else {
-            "No song playing".to_string()
-        };
-
-
         let selected_song_info = Paragraph::new(selected_song_details)
             .block(
                 Block::default()
@@ -643,7 +611,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let tabs = ratatui::widgets::Tabs::new(vec![
                 Tabs::Songs.to_string(),
-                Tabs::Visualizer.to_string(),
                 Tabs::Settings.to_string(),
             ])
             .block(Block::bordered().title("Tabs"))
@@ -653,8 +620,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .padding(" ", " ")
             .select(match myapp.current_tab {
                 Tabs::Songs => 0,
-                Tabs::Visualizer => 1,
-                Tabs::Settings => 2,
+                Tabs::Settings => 1,
             });
             f.render_widget(tabs, vertical_layout[0]);
 
@@ -781,28 +747,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if myapp.playlist_input_popup.visible {
                         let _ = draw_playlist_name_input_popup(f, &myapp.playlist_name_input);
                     }
-                }
-                Tabs::Visualizer => {
-                    let layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([
-                            Constraint::Percentage(93),
-                            Constraint::Percentage(7),
-                        ])
-                        .split(vertical_layout[1]);
-
-                    let song_info_layout = Layout::default()
-                        .direction(Direction::Horizontal)
-                        .constraints([
-                            Constraint::Fill(1),
-                            Constraint::Percentage(20),
-                        ])
-                        .split(layout[1]);
-
-
-                    f.render_widget(song_progress.label(short_playing_song_details), song_info_layout[0]);
-                    f.render_widget(volume_bar, song_info_layout[1]);
-                    
                 }
                 Tabs::Settings => {}
             }
