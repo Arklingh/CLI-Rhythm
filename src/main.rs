@@ -29,7 +29,8 @@ use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Wrap};
 use ratatui::{symbols, Frame};
-use ratatui_image::protocol::StatefulProtocol;
+use ratatui_image::picker::Picker;
+use ratatui_image::StatefulImage;
 use rodio::{OutputStream, Sink, Source};
 
 use audiotags::{types::Album, Tag};
@@ -37,7 +38,7 @@ use dirs;
 use mp3_metadata::read_from_file;
 use textwrap::wrap;
 use uuid::Uuid;
-use image::{self, load_from_memory_with_format, DynamicImage, ImageFormat};
+use image::{self, load_from_memory_with_format, DynamicImage, ImageBuffer, ImageFormat, Rgba};
 
 /// Supported music file formats.
 const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
@@ -312,6 +313,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
     let mut terminal = ratatui::init();
+    let picker = Picker::from_fontsize((7, 14));
 
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
@@ -453,9 +455,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .style(Style::default().fg(Color::White));
 
         let playing_song_info = Paragraph::new(playing_song_details)
-            .block(Block::default().borders(Borders::ALL).title("Playing Song"))
-            .style(Style::default().fg(Color::White));
-
+            .block(Block::default()).style(Style::default().fg(Color::White));
+        
+        let playing_song_cover = if let Some(song_id) = myapp.currently_playing_song {
+            myapp.find_song_by_id(song_id)
+                .and_then(|song| song.cover.clone())
+                .unwrap_or_else(|| {
+                    let img = ImageBuffer::from_fn(4, 4, |_, _| Rgba([0, 0, 0, 0]));
+                    DynamicImage::ImageRgba8(img)
+                })
+        } else {
+                let img = ImageBuffer::from_fn(4, 4, |_, _| Rgba([0, 0, 0, 0]));
+                DynamicImage::ImageRgba8(img)
+        };
+        let mut pic = picker.new_resize_protocol(playing_song_cover);
+        let img = StatefulImage::default();
+        
         // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
             if let Some(song) = myapp.find_song_by_id(current_song_id).cloned() {
@@ -698,12 +713,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     let songs_info = Layout::default()
                         .direction(Direction::Vertical)
-                        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
                         .split(chunks[2]);
 
                     f.render_widget(selected_song_info, songs_info[0]);
-                    f.render_widget(playing_song_info, songs_info[1]);
 
+                    let playing_song_block = Block::default()
+                        .borders(Borders::ALL)
+                        .title("Currently playing");
+                    let inner_layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Percentage(40), Constraint::Fill(1)])
+                        .split(playing_song_block.inner(songs_info[1]));
+
+                    f.render_widget(playing_song_info, inner_layout[0]);
+                    f.render_stateful_widget(img, inner_layout[1], &mut pic);
+                    f.render_widget(playing_song_block, songs_info[1]);
+                    
                     let footer = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
@@ -1398,8 +1424,7 @@ fn scan_folder_for_music() -> Vec<Song> {
                             audiotags::MimeType::Gif => ImageFormat::Gif,
                             audiotags::MimeType::Bmp => ImageFormat::Bmp,
                             audiotags::MimeType::Tiff => ImageFormat::Tiff,
-                            _ => ImageFormat::Jpeg,
-                         };
+                        };
 
                         load_from_memory_with_format(cover.data, format).ok()
                     })
