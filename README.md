@@ -58,7 +58,10 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - Backspace: Delete characters in the search bar
 - Ctrl + A: Select a song to be added to the new playlist
 - Ctrl + C: New playlist name input popup
+- Ctrl + K: Move playlist selection up
+- Ctrl + J: Move playlist selection down
 - Enter: Create a new playlist with given name
+- Ctrl + X: Delete selected playlist
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup
 
@@ -67,7 +70,7 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - [x] **Creating Playlists**: Allow users to group song by preference.
 - [ ] **Support for Additional File Formats**: Extend compatibility to more audio formats such as AAC, OGG, and AIFF.
 - [ ] **Shuffle & Repeat Modes**: Add options for shuffling songs in a playlist or repeating a song/playlist.
-- [ ] **Visualizer**: Create a simple audio visualizer that reacts to music in the terminal using ASCII art or symbols.
+- [x] **Visualizer**: Create a simple audio visualizer that reacts to music in the terminal using ASCII art or symbols.
 - [x] **Notifications**: Show notifications when a song changes, pauses, or resumes, even if the user is in another terminal window.
 - [ ] **Configurable Key Bindings**: Allow users to customize keyboard shortcuts according to their preferences.
 - [ ] **Cross-Platform Support**: Ensure the application runs smoothly on Windows, macOS, and Linux.
