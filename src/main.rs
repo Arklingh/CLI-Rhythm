@@ -11,7 +11,7 @@
 extern crate crossterm;
 extern crate ratatui;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::env;
 use std::fs::File;
 use std::io::{stdout, Write};
@@ -61,6 +61,27 @@ struct Song {
     duration: f64,
     /// Indicates if the song is currently playing.
     is_playing: bool,
+}
+
+struct AudioVisualizer {
+    buffer: VecDeque<f32>,
+    buffer_size: usize,
+}
+
+impl AudioVisualizer {
+    fn new(buffer_size: usize) -> Self {
+        Self {
+            buffer: VecDeque::with_capacity(buffer_size),
+            buffer_size,
+        }
+    }
+
+    fn update(&mut self, amplitude: f32) {
+        if self.buffer.len() >= self.buffer_size {
+            self.buffer.pop_front();
+        }
+        self.buffer.push_back(amplitude);
+    }
 }
 
 impl Song {
@@ -446,6 +467,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "No song playing".to_string()
         };
 
+        let short_playing_song_details = if let Some(song_id) = myapp.currently_playing_song {
+            let song = myapp.find_song_by_id(song_id).unwrap();
+            format!("{} - {}", song.artist, song.title)
+        } else {
+            "No song playing".to_string()
+        };
+
+
         let selected_song_info = Paragraph::new(selected_song_details)
             .block(
                 Block::default()
@@ -608,9 +637,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .margin(1)
                 .constraints([
                     Constraint::Length(3),
-                    Constraint::Length(3),
-                    Constraint::Percentage(80),
-                    Constraint::Percentage(8),
+                    Constraint::Fill(1),
                 ])
                 .split(f.area());
 
@@ -633,7 +660,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match myapp.current_tab {
                 Tabs::Songs => {
-                    f.render_widget(search_bar, vertical_layout[1]);
+                    let song_tab_layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Percentage(7),
+                            Constraint::Percentage(86),
+                            Constraint::Percentage(7),
+                        ])
+                        .split(vertical_layout[1]);
+                    f.render_widget(search_bar, song_tab_layout[0]);
 
                     let chunks = Layout::default()
                         .direction(Direction::Horizontal)
@@ -642,7 +677,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             Constraint::Percentage(60),
                             Constraint::Percentage(20),
                         ])
-                        .split(vertical_layout[2]);
+                        .split(song_tab_layout[1]);
 
                     visible_playlist_count = (chunks[0].height - 2) as usize;
                     visible_song_count = (chunks[1].height - 2) as usize;
@@ -733,7 +768,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let footer = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
-                        .split(vertical_layout[3]);
+                        .split(song_tab_layout[2]);
 
                     f.render_widget(song_progress, footer[0]);
 
@@ -746,22 +781,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if myapp.playlist_input_popup.visible {
                         let _ = draw_playlist_name_input_popup(f, &myapp.playlist_name_input);
                     }
-
-                    f.render_widget(
-                        hint,
-                        Rect::new(
-                            f.area().width.saturating_sub(20 as u16),
-                            f.area().height - 1,
-                            20 as u16,
-                            1,
-                        ),
-                    );
                 }
                 Tabs::Visualizer => {
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Percentage(93),
+                            Constraint::Percentage(7),
+                        ])
+                        .split(vertical_layout[1]);
+
+                    let song_info_layout = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([
+                            Constraint::Fill(1),
+                            Constraint::Percentage(20),
+                        ])
+                        .split(layout[1]);
+
+
+                    f.render_widget(song_progress.label(short_playing_song_details), song_info_layout[0]);
+                    f.render_widget(volume_bar, song_info_layout[1]);
                     
                 }
                 Tabs::Settings => {}
             }
+            f.render_widget(
+                hint,
+                Rect::new(
+                    f.area().width.saturating_sub(20 as u16),
+                    f.area().height - 1,
+                    20 as u16,
+                    1,
+                ),
+            );
         })?;
 
         // Handle input events
