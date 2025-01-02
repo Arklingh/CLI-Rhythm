@@ -11,7 +11,7 @@
 extern crate crossterm;
 extern crate tui;
 
-use std::collections::{BTreeMap, /* HashMap */};
+use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
 use std::io::{stdout, Write};
@@ -1264,7 +1264,10 @@ fn draw_popup(f: &mut tui::Frame<CrosstermBackend<io::Stdout>>) -> Result<(), io
         popup_height,
     );
 
-    f.render_widget(Block::default().borders(Borders::ALL), popup_area);
+    f.render_widget(Block::default()
+        .borders(Borders::ALL)
+        .border_type(tui::widgets::BorderType::Rounded), 
+        popup_area);
 
     let popup_text = Paragraph::new(
         "Controls
@@ -1363,6 +1366,7 @@ fn send_notification(message: &str) {
         .summary("CLI-Rhythm")
         .body(message)
         .icon("music")
+        .timeout(100)
         .show()
         .unwrap();
 }
