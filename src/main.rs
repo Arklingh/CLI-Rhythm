@@ -419,7 +419,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (song.duration / 60.0).floor(),
                 (song.duration % 60.0).round()
             );
-            let wrapped_details = wrap(&contents, 23);
+            let wrapped_details = wrap(&contents, 29);
 
             wrapped_details.join("\n")
         } else {
@@ -436,7 +436,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (song.duration / 60.0).floor(),
                 (song.duration % 60.0).round()
             );
-            let wrapped_details = wrap(&contents, 23);
+            let wrapped_details = wrap(&contents, 29);
 
             wrapped_details.join("\n")
         } else {
@@ -538,7 +538,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(paused_time) = myapp.paused_time {
                         let elapsed_time = song_time.elapsed().as_secs_f64().min(song.duration);
                         ratio =
-                            (elapsed_time - paused_time.elapsed().as_secs_f64()) / song.duration;
+                            (elapsed_time - paused_time.elapsed().as_secs_f64()).max(0.0) / song.duration;
                     }
                 }
                 ratio
