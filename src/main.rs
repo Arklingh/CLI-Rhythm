@@ -25,10 +25,10 @@ use crossterm::event::{poll, Event, KeyCode, KeyEvent, KeyEventKind, KeyEventSta
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear};
 use crossterm::ExecutableCommand;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::style::{Color, Modifier, Style };
 use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Wrap};
-use ratatui::{symbols, Frame};
+use ratatui::Frame;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
 use rodio::{OutputStream, Sink, Source};
@@ -94,30 +94,6 @@ impl Song {
         let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
         sink.lock().unwrap().append(source);
         sink.lock().unwrap().play();
-    }
-}
-
-#[derive(Debug)]
-enum Tabs {
-    Songs,
-    Settings,
-}
-
-impl Tabs {
-    fn next(&self) -> Tabs {
-        match self {
-            Tabs::Songs => Tabs::Settings,
-            Tabs::Settings => Tabs::Songs,
-        }
-    }
-}
-
-impl ToString for Tabs {
-    fn to_string(&self) -> String {
-        match self {
-            Tabs::Songs => "Songs".to_string(),
-            Tabs::Settings => "Settings".to_string(),
-        }
     }
 }
 
@@ -189,7 +165,6 @@ pub struct MyApp {
     paused_time: Option<Instant>,
     chosen_song_ids: Vec<Uuid>,
     song_time: Option<Instant>,
-    current_tab: Tabs,
 }
 
 impl MyApp {
@@ -216,7 +191,6 @@ impl MyApp {
             paused_time: None,
             chosen_song_ids: vec![],
             song_time: None,
-            current_tab: Tabs::Songs,
         }
     }
 
@@ -604,152 +578,132 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(3),
                     Constraint::Fill(1),
                 ])
                 .split(f.area());
 
-            let tabs = ratatui::widgets::Tabs::new(vec![
-                Tabs::Songs.to_string(),
-                Tabs::Settings.to_string(),
-            ])
-            .block(Block::bordered().title("Tabs"))
-            .style(Style::default().white())
-            .highlight_style(Style::default().red())
-            .divider(symbols::DOT)
-            .padding(" ", " ")
-            .select(match myapp.current_tab {
-                Tabs::Songs => 0,
-                Tabs::Settings => 1,
-            });
-            f.render_widget(tabs, vertical_layout[0]);
+                let song_tab_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Percentage(7),
+                        Constraint::Percentage(86),
+                        Constraint::Percentage(7),
+                    ])
+                    .split(vertical_layout[0]);
+                f.render_widget(search_bar, song_tab_layout[0]);
 
-            match myapp.current_tab {
-                Tabs::Songs => {
-                    let song_tab_layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([
-                            Constraint::Percentage(7),
-                            Constraint::Percentage(86),
-                            Constraint::Percentage(7),
-                        ])
-                        .split(vertical_layout[1]);
-                    f.render_widget(search_bar, song_tab_layout[0]);
+                let chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(20),
+                        Constraint::Percentage(60),
+                        Constraint::Percentage(20),
+                    ])
+                    .split(song_tab_layout[1]);
 
-                    let chunks = Layout::default()
-                        .direction(Direction::Horizontal)
-                        .constraints([
-                            Constraint::Percentage(20),
-                            Constraint::Percentage(60),
-                            Constraint::Percentage(20),
-                        ])
-                        .split(song_tab_layout[1]);
+                visible_playlist_count = (chunks[0].height - 2) as usize;
+                visible_song_count = (chunks[1].height - 2) as usize;
 
-                    visible_playlist_count = (chunks[0].height - 2) as usize;
-                    visible_song_count = (chunks[1].height - 2) as usize;
-
-                    let song_items: Vec<ListItem> = myapp
-                        .filtered_songs
-                        .iter()
-                        .enumerate()
-                        .skip(myapp.list_offset)
-                        .take(visible_song_count as usize)
-                        .map(|(index, song)| {
-                            let mut style = Style::default();
-                            if myapp.chosen_song_ids.contains(&myapp.songs[index].id) {
-                                style = Style::default()
-                                    .fg(Color::LightRed)
-                                    .add_modifier(Modifier::RAPID_BLINK);
-                            }
-                            if let Some(selected_id) = myapp.selected_song_id {
-                                if selected_id == song.id {
-                                    style = Style::default()
-                                        .fg(Color::LightBlue)
-                                        .add_modifier(Modifier::BOLD);
-                                }
-                            }
-                            ListItem::new(song.title.clone()).style(style)
-                        })
-                        .collect();
-
-                    let song_list = List::new(song_items)
-                        .block(
-                            Block::default()
-                                .borders(Borders::ALL)
-                                .title(format!("Songs----------------------------------------------------------------------Sort by: {}", 
-                                    myapp.sort_criteria.to_string(),))
-                        )
-                        .highlight_style(
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        );
-
-                    let playlist_items: Vec<ListItem> = myapp
-                        .playlists
-                        .iter()
-                        .enumerate()
-                        .map(|(index, (playlist_name, _songs))| {
-                            let mut style = Style::default();
-                            if myapp.selected_playlist_index == index {
+                let song_items: Vec<ListItem> = myapp
+                    .filtered_songs
+                    .iter()
+                    .enumerate()
+                    .skip(myapp.list_offset)
+                    .take(visible_song_count as usize)
+                    .map(|(index, song)| {
+                        let mut style = Style::default();
+                        if myapp.chosen_song_ids.contains(&myapp.songs[index].id) {
+                            style = Style::default()
+                                .fg(Color::LightRed)
+                                .add_modifier(Modifier::RAPID_BLINK);
+                        }
+                        if let Some(selected_id) = myapp.selected_song_id {
+                            if selected_id == song.id {
                                 style = Style::default()
                                     .fg(Color::LightBlue)
                                     .add_modifier(Modifier::BOLD);
                             }
-                            ListItem::new(playlist_name.clone()).style(style)
-                        })
-                        .collect();
+                        }
+                        ListItem::new(song.title.clone()).style(style)
+                    })
+                    .collect();
 
-                    let playlist_list = List::new(playlist_items)
-                        .block(Block::default().borders(Borders::ALL).title("Playlists"))
-                        .highlight_style(
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        );
+                let song_list = List::new(song_items)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(format!("Songs----------------------------------------------------------------------Sort by: {}", 
+                                myapp.sort_criteria.to_string(),))
+                    )
+                    .highlight_style(
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    );
 
-                    f.render_widget(playlist_list, chunks[0]);
+                let playlist_items: Vec<ListItem> = myapp
+                    .playlists
+                    .iter()
+                    .enumerate()
+                    .map(|(index, (playlist_name, _songs))| {
+                        let mut style = Style::default();
+                        if myapp.selected_playlist_index == index {
+                            style = Style::default()
+                                .fg(Color::LightBlue)
+                                .add_modifier(Modifier::BOLD);
+                        }
+                        ListItem::new(playlist_name.clone()).style(style)
+                    })
+                    .collect();
 
-                    f.render_widget(song_list, chunks[1]);
+                let playlist_list = List::new(playlist_items)
+                    .block(Block::default().borders(Borders::ALL).title("Playlists"))
+                    .highlight_style(
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    );
 
-                    let songs_info = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-                        .split(chunks[2]);
+                f.render_widget(playlist_list, chunks[0]);
 
-                    f.render_widget(selected_song_info, songs_info[0]);
+                f.render_widget(song_list, chunks[1]);
 
-                    let playing_song_block = Block::default()
-                        .borders(Borders::ALL)
-                        .title("Currently playing");
-                    let inner_layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([Constraint::Percentage(40), Constraint::Fill(1)])
-                        .split(playing_song_block.inner(songs_info[1]));
+                let songs_info = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+                    .split(chunks[2]);
 
-                    f.render_widget(playing_song_info, inner_layout[0]);
-                    f.render_stateful_widget(img, inner_layout[1], &mut pic);
-                    f.render_widget(playing_song_block, songs_info[1]);
-                    
-                    let footer = Layout::default()
-                        .direction(Direction::Horizontal)
-                        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
-                        .split(song_tab_layout[2]);
+                f.render_widget(selected_song_info, songs_info[0]);
 
-                    f.render_widget(song_progress, footer[0]);
+                let playing_song_block = Block::default()
+                    .borders(Borders::ALL)
+                    .title("Currently playing");
+                let inner_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Percentage(40), Constraint::Fill(1)])
+                    .split(playing_song_block.inner(songs_info[1]));
 
-                    f.render_widget(volume_bar, footer[1]);
+                f.render_widget(playing_song_info, inner_layout[0]);
+                f.render_stateful_widget(img, inner_layout[1], &mut pic);
+                f.render_widget(playing_song_block, songs_info[1]);
+                
+                let footer = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+                    .split(song_tab_layout[2]);
 
-                    if myapp.hint_popup_state.visible {
-                        let _ = draw_popup(f);
-                    }
+                f.render_widget(song_progress, footer[0]);
 
-                    if myapp.playlist_input_popup.visible {
-                        let _ = draw_playlist_name_input_popup(f, &myapp.playlist_name_input);
-                    }
+                f.render_widget(volume_bar, footer[1]);
+
+                if myapp.hint_popup_state.visible {
+                    let _ = draw_popup(f);
                 }
-                Tabs::Settings => {}
-            }
+
+                if myapp.playlist_input_popup.visible {
+                    let _ = draw_playlist_name_input_popup(f, &myapp.playlist_name_input);
+                }
+                
             f.render_widget(
                 hint,
                 Rect::new(
@@ -1322,15 +1276,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             myapp.selected_playlist_index = 0;
                         }
                     }
-                    KeyEvent {
-                        code: KeyCode::Tab,
-                        modifiers: KeyModifiers::NONE,
-                        kind: KeyEventKind::Press,
-                        state: KeyEventState::NONE,
-                    } => {
-                        myapp.current_tab = myapp.current_tab.next();
-                    }
-
                     _ => {}
                 }
             } else {
