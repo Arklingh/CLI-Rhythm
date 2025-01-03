@@ -446,6 +446,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(current_song_id) = myapp.currently_playing_song {
             if let Some(song) = myapp.find_song_by_id(current_song_id).cloned() {
                 if song.is_playing {
+
                     // Update song time
                     myapp.song_time = Some(
                         myapp.song_time.unwrap_or(Instant::now()) + Duration::from_secs_f64(0.1),
@@ -453,6 +454,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     // If the song is finished, play the next one
                     if myapp.song_time.unwrap().elapsed().as_secs_f64() >= song.duration {
+
                         if let Some(current_song) = myapp.find_song_by_id(current_song_id) {
                             current_song.is_playing = false;
                         }
@@ -1218,6 +1220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         kind: KeyEventKind::Press,
                         state: KeyEventState::NONE,
                     } => {
+
                         match (
                             myapp.playlist_name_input.is_empty(),
                             myapp.chosen_song_ids.is_empty(),
