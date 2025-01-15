@@ -25,7 +25,7 @@ use crossterm::event::{poll, Event, KeyCode, KeyEvent, KeyEventKind, KeyEventSta
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear};
 use crossterm::ExecutableCommand;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style };
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
