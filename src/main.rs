@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if let Ok(Some(a)) = clock_to_main_recv.try_recv() {
             if myapp.currently_playing_song.is_some() {
-                dbg!(a);
+                //dbg!(a);
                 elapsed_time += Duration::from_millis(100);
                 myapp.song_time = Some(elapsed_time);
             }
