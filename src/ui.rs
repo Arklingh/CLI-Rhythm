@@ -1,3 +1,23 @@
+//! Popup Rendering Utilities for TUI Music App
+//!
+//! This module provides functions to render interactive popup components
+//! using the `ratatui` library for terminal user interfaces.
+//!
+//! Included Functions:
+//! - `draw_popup`: Renders a centered help popup showing all keybindings
+//!   and controls for navigating and managing music and playlists.
+//!
+//! - `draw_playlist_name_input_popup`: Displays a small, centered input box
+//!   allowing users to enter a new playlist name.
+//!
+//! Rendering Details:
+//! - Uses `Paragraph`, `Block`, `Borders`, and `Alignment` from `ratatui::widgets`.
+//! - Popup dimensions are dynamically calculated based on terminal size.
+//! - Styled using `ratatui::style::{Color, Style}` for consistent appearance.
+//!
+//! These popups improve UX by giving users clear, accessible modal interfaces
+//! for help and input without leaving the TUI context.
+
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};

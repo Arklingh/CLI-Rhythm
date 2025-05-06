@@ -1,3 +1,20 @@
+//! Song Struct and Playback Implementation for TUI Music App
+//!
+//! This module defines the `Song` struct which represents a music track in the application.
+//! Each song holds metadata such as title, artist, album, cover image, duration, file path,
+//! and a playback status flag.
+//!
+//! Key Features:
+//! - Each `Song` instance is uniquely identified using a UUID (based on its file path).
+//! - Optional support for cover art using the `image` crate's `DynamicImage`.
+//! - Includes a method `play` to stream and play the song using `rodio` audio playback.
+//!
+//! Dependencies include:
+//! - `rodio` for audio decoding and playback.
+//! - `uuid` for unique song identification.
+//! - `image` for optional album cover handling.
+//! - `Arc<Mutex<Sink>>` for shared and safe control of audio playback across threads.
+
 use image::DynamicImage;
 use rodio::Sink;
 use std::fs;
@@ -19,7 +36,14 @@ pub struct Song {
 }
 
 impl Song {
-    pub fn new(title: String, artist: String, cover: Option<DynamicImage>, path: PathBuf, album: String, duration: f64) -> Self {
+    pub fn new(
+        title: String,
+        artist: String,
+        cover: Option<DynamicImage>,
+        path: PathBuf,
+        album: String,
+        duration: f64,
+    ) -> Self {
         Song {
             id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, path.to_str().unwrap().as_bytes()),
             title,

@@ -1,9 +1,32 @@
+//! Music Metadata Handling and Song Management
+//!
+//! This module provides core functionality for scanning the filesystem
+//! for music files, extracting metadata, handling popup state, and
+//! managing search and sorting criteria.
+//!
+//! Key Components:
+//! - `scan_folder_for_music`: Scans the user's music or current directory
+//!   for supported formats (`mp3`, `wav`, `flac`, `aac`), extracts tags
+//!   using `audiotags` and `mp3_metadata`, and constructs `Song` instances.
+//!
+//! - `PopupState`: Stores visibility state for popups (like help or input dialogs).
+//!
+//! - `SearchCriteria` and `SortCriteria`: Enums for defining user-selectable
+//!   filters and sorting logic.
+//!
+//! - `sort_songs`: Sorts a vector of `Song` instances by title, artist, or duration.
+//!
+//! Additional Notes:
+//! - Song metadata includes album art decoding via `image` crate.
+//! - The system gracefully handles cases where metadata or song files are missing or incomplete.
+
 use crate::song::Song;
 use audiotags::{types::Album, Tag};
 use dirs;
 use image::{load_from_memory_with_format, ImageFormat};
 use mp3_metadata::read_from_file;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 
@@ -45,14 +68,17 @@ impl SortCriteria {
     }
 }
 
-impl ToString for SortCriteria {
-    /// Converts the sorting criteria to a string representation.
-    fn to_string(&self) -> String {
-        match self {
-            SortCriteria::Title => "Title".to_string(),
-            SortCriteria::Artist => "Artist".to_string(),
-            SortCriteria::Duration => "Duration".to_string(),
-        }
+impl fmt::Display for SortCriteria {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SortCriteria::Title => "Title",
+                SortCriteria::Artist => "Artist",
+                SortCriteria::Duration => "Duration",
+            }
+        )
     }
 }
 

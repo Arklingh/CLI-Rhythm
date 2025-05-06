@@ -105,7 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             stop_signal.store(false, std::sync::atomic::Ordering::Relaxed);
         }
-        if let Ok(Some(a)) = clock_to_main_recv.try_recv() {
+        if let Ok(Some(_)) = clock_to_main_recv.try_recv() {
             if myapp.currently_playing_song.is_some() {
                 //dbg!(a);
                 elapsed_time += Duration::from_millis(100);

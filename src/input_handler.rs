@@ -1,10 +1,29 @@
+//! Key Event Handler for TUI Music Application
+//!
+//! This module defines the `handle_key_event` function which processes user input
+//! via keyboard events using the `crossterm` crate. It manages user interactions
+//! such as navigating playlists and songs, playing/pausing/stopping music,
+//! adjusting volume, editing search and playlist input fields, and toggling playback states.
+//!
+//! Supported Features:
+//! - Song and playlist selection with wrapping and scrolling
+//! - Playback control (play, pause, next, previous, stop)
+//! - Volume control and mute toggle
+//! - Playlist input popup activation
+//! - Search field character input and deletion
+//! - Switching between search criteria (title, artist, album)
+//! - Changing sort criteria
+//!
+//! The function modifies the `MyApp` application state, controls a shared `rodio::Sink`
+//! for audio playback, and tracks view-related parameters for rendering playlists/songs.
+
 use crate::app::MyApp;
+use crate::utils::SearchCriteria;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use rodio::Sink;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
-use crate::utils::SearchCriteria;
 
 pub fn handle_key_event(
     key: KeyEvent,

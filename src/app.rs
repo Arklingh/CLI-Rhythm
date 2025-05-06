@@ -1,5 +1,24 @@
+//! File: app.rs
+//!
+//! Description:
+//! This file defines the `MyApp` struct, which serves as the core of a CLI-based
+//! music player application. It manages song data, playback control using `rodio`,
+//! playlist handling, search and sort functionality, and user interface state.
+//! The application supports loading songs from a directory, filtering and sorting
+//! them, playing selected tracks, and saving/loading playlists from disk.
+//!
+//! Key Features:
+//! - Maintains a list of all and filtered songs
+//! - Controls playback with support for pause/resume and seek
+//! - Allows creation and management of playlists
+//! - Handles search and sorting based on customizable criteria
+//! - Saves and restores application state (playlists) via JSON
+//!
+//! Dependencies: rodio, serde_json, dirs, uuid, std libraries
+
 use crate::song::Song;
 use crate::utils::sort_songs;
+use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
 use rodio::{OutputStream, Sink};
 use serde_json;
@@ -10,7 +29,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
-use crate::utils::{PopupState, SearchCriteria, SortCriteria, scan_folder_for_music};
 
 /// The main application struct.
 #[allow(dead_code)]
