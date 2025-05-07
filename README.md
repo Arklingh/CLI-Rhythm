@@ -69,7 +69,6 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 ## Planned Features
 
 - [x] **Creating Playlists**: Allow users to group song by preference.
-- [ ] **Support for Additional File Formats**: Extend compatibility to more audio formats such as AAC, OGG, and AIFF.
 - [ ] **Shuffle & Repeat Modes**: Add options for shuffling songs in a playlist or repeating a song/playlist.
 - [ ] **Cross-Platform Support**: Ensure the application runs smoothly on Windows, macOS, and Linux.
 - [x] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
