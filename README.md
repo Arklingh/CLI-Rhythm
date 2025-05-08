@@ -11,6 +11,8 @@ cli-rhythm is a simple, functional, and lightweight Command-Line Interface (CLI)
 - **Minimalistic interface**: Clean and simple UI for focusing on music.
 - **Keyboard shortcuts**: Navigate and control the player entirely via keyboard.
 - **Metadata extraction**: Automatically extracts song information such as artist, album, and track title.
+- **Shuffle**: Randomizes the playback order of songs to provide a varied and unpredictable listening experience.
+- **Repeat**: Allows continuous playback of a single track or the entire playlist, looping for uninterrupted listening.
 
 # Installation
 
@@ -76,7 +78,6 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - [x] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
 
 ## Known Issues
-- Fast consecutive song's volume and progress changes move the progress bar back.   
 - If you encounter any problems, please [open an issue](https://github.com/Arklingh/CLI-Rhythm/issues).
 
 ## License
