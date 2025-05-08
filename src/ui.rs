@@ -27,7 +27,7 @@ use std::io;
 pub fn draw_popup(f: &mut Frame) -> Result<(), io::Error> {
     let size = f.area();
     let popup_width = size.width / 3;
-    let popup_height = size.height / 3 + 8;
+    let popup_height = size.height / 3 + 10;
     let popup_area = Rect::new(
         (size.width - popup_width) / 2,
         (size.height - popup_height) / 2,
@@ -64,6 +64,8 @@ pub fn draw_popup(f: &mut Frame) -> Result<(), io::Error> {
 - Ctrl + J: Move playlist selection down
 - Enter: Create a new playlist with given name
 - Ctrl + X: Delete selected playlist
+- Ctrl + R: Enable/disable song repeat
+- Ctrl + F: Enable/disable playlist repeat
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup",
     )

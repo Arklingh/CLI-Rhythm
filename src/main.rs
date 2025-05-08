@@ -10,10 +10,6 @@
 //! - Control playback with keyboard shortcuts.
 //! - Save and load playlists for quick access.
 
-/// Problems
-/// - No +/- 5 seconds on current song!!!
-/// - No Mouse support
-
 extern crate crossterm;
 extern crate ratatui;
 
@@ -38,21 +34,19 @@ use std::io::stdout;
 use std::ops::Sub;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{fs, io};
 use utils::sort_songs;
 use ui::{draw_popup, draw_playlist_name_input_popup};
 use utils::SearchCriteria;
 use textwrap::wrap;
 use image::{ImageBuffer, Rgba, DynamicImage};
-use flume;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
     let mut terminal = ratatui::init();
     let picker = Picker::from_fontsize((7, 14));
-    let (clock_to_main_sender, clock_to_main_recv) = flume::unbounded();
     let stop_signal = Arc::new(AtomicBool::new(false));
     let mut exit_code = false;
 
@@ -81,38 +75,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap()));
 
     let mut time_thread: Option<std::thread::JoinHandle<()>> = None;
-    let mut elapsed_time = Duration::default();
-    // Run event loop
+     // Run event loop
     loop {
-        if myapp.currently_playing_song.is_some() && time_thread.is_none() && myapp.paused_time.is_none() {
-            let clone_send = clock_to_main_sender.clone();
-            let stop_signal_clone = stop_signal.clone();
-            time_thread = Some(std::thread::spawn(move || {
-                loop {
-                    if stop_signal_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                        break;
-                    }
-                    clone_send.send(Some(Instant::now())).unwrap();
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-                clone_send.send(None).unwrap();
-                stop_signal_clone.store(false, std::sync::atomic::Ordering::Relaxed);
-            }));
-        } else if myapp.currently_playing_song.is_none() && time_thread.is_some() {
-            stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
-            if let Some(handle) = time_thread.take() {
-                handle.join().unwrap();
-            }
-            stop_signal.store(false, std::sync::atomic::Ordering::Relaxed);
-        }
-        if let Ok(Some(_)) = clock_to_main_recv.try_recv() {
-            if myapp.currently_playing_song.is_some() {
-                //dbg!(a);
-                elapsed_time += Duration::from_millis(100);
-                myapp.song_time = Some(elapsed_time);
-            }
-        }
-
+        myapp.song_time = Some(sink.lock().unwrap().get_pos());
+        
         let search_bar_title = match myapp.search_criteria {
             SearchCriteria::Title => "Search by Title",
             SearchCriteria::Artist => "Search by Artist",
@@ -246,10 +212,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
             if let Some(song) = myapp.find_song_by_id(current_song_id).cloned() {
-                if song.is_playing {
-                    // If the song is finished, play the next one
-                    if myapp.song_time.unwrap().as_secs_f64() >= song.duration {
-
+                if song.is_playing && myapp.song_time.unwrap().as_secs_f64() >= song.duration {
+                    if myapp.repeat_song {
+                        let file = fs::File::open(&song.path).unwrap();
+                        let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+                        myapp.paused_time = None;
+                        sink.lock().unwrap().clear();
+                        sink.lock().unwrap().append(source);
+                        sink.lock().unwrap().play();
+                    } else {
                         if let Some(current_song) = myapp.find_song_by_id(current_song_id) {
                             current_song.is_playing = false;
                         }
@@ -269,8 +240,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if let Some(song) = next_song {
                             let file = fs::File::open(&song.path).unwrap();
                             let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                            elapsed_time = Duration::default();
-                            myapp.song_time = Some(elapsed_time);
                             myapp.currently_playing_song =
                                 Some(myapp.filtered_songs[next_index].id);
                             myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
@@ -279,7 +248,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             sink.lock().unwrap().clear();
                             sink.lock().unwrap().append(source);
                             sink.lock().unwrap().play();
-                        }
+                        }                    
                     }
                 }
             }
@@ -430,7 +399,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title(format!("Songs----------------------------------------------------------------------Sort by: {}", 
+                        .title(format!("Songs-------------------------------------------------------------------Sort by: {}", 
                             myapp.sort_criteria.to_string(),))
                 )
                 .highlight_style(
@@ -455,7 +424,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect();
 
             let playlist_list = List::new(playlist_items)
-                .block(Block::default().borders(Borders::ALL).title("Playlists"))
+                .block(Block::default().borders(Borders::ALL).title(format!("Playlists------Repeat:{}", if myapp.repeat_playlist {"✅"} else {"❌"})))
                 .highlight_style(
                     Style::default()
                         .fg(Color::Yellow)
@@ -476,7 +445,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let playing_song_block = Block::default()
                 .borders(Borders::ALL)
-                .title("Currently playing");
+                .title(format!("Current song----Repeat:{}", if myapp.repeat_song {"✅"} else {"❌"}));
 
             let inner_layout = Layout::default()
                 .direction(Direction::Vertical)

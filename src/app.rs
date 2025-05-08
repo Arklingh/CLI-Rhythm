@@ -20,13 +20,11 @@ use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
-use rodio::{OutputStream, Sink};
 use serde_json;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -35,7 +33,6 @@ use uuid::Uuid;
 pub struct MyApp {
     pub songs: Box<Vec<Song>>, // List of all songs
     pub filtered_songs: Vec<Song>,
-    pub sink: Arc<Mutex<Sink>>,
     pub selected_song_id: Option<Uuid>, // Index of the currently selected song
     pub currently_playing_song: Option<Uuid>, // Index of the currently playing song
     pub search_criteria: SearchCriteria, // Criteria to filter/search songs
@@ -52,17 +49,17 @@ pub struct MyApp {
     pub paused_time: Option<Duration>,
     pub chosen_song_ids: Vec<Uuid>,
     pub song_time: Option<Duration>,
+    pub repeat_playlist: bool,
+    pub repeat_song: bool,
 }
 
 #[allow(dead_code)]
 impl MyApp {
     // Initialize a new MyApp instance with default values
     pub fn new() -> MyApp {
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         MyApp {
             songs: Box::new(Vec::new()),
             filtered_songs: Vec::new(),
-            sink: Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap())),
             selected_song_id: None,
             currently_playing_song: None,
             search_criteria: SearchCriteria::Title,
@@ -79,6 +76,8 @@ impl MyApp {
             paused_time: None,
             chosen_song_ids: vec![],
             song_time: None,
+            repeat_playlist: false,
+            repeat_song: false,
         }
     }
 
@@ -97,17 +96,6 @@ impl MyApp {
 
     pub fn find_song_by_id(&mut self, id: Uuid) -> Option<&mut Song> {
         self.songs.iter_mut().find(|song| song.id == id)
-    }
-
-    // Function to play a song
-    pub fn play_song(&mut self) {
-        if let Some(index) = self.selected_song_id {
-            self.currently_playing_song = Some(index);
-            let song = self.find_song_by_id(index).unwrap().clone();
-            song.play(&self.sink);
-            self.find_song_by_id(index).unwrap().is_playing = true;
-            self.song_time = Some(Duration::default());
-        }
     }
 
     // Function to stop the current song

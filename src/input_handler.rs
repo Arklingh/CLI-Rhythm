@@ -424,38 +424,11 @@ pub fn handle_key_event(
             if let Some(current_id) = myapp.currently_playing_song {
                 if let Some(_) = myapp.songs.iter().find(|song| song.id == current_id) {
                     let sink = sink.lock().unwrap();
-                    let current_position = sink.get_pos();
-                    let new_position = current_position + Duration::from_secs(5);
+                    let new_position = sink.get_pos() + Duration::from_secs(5);
                     sink.try_seek(new_position).unwrap();
                     myapp.song_time = Some(new_position);
                 }
             }
-            /*if let Some(current_id) = myapp.currently_playing_song {
-                if let Some(current_song) = myapp.songs.iter().find(|song| song.id == current_id) {
-                    let file = fs::File::open(&current_song.path).unwrap();
-                    let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-
-                    let elapsed_time = if let Some(paused_time) = myapp.paused_time {
-                        myapp.song_time
-                            .unwrap_or_else(Instant::now)
-                            .elapsed()
-                            .saturating_sub(paused_time.elapsed())
-                    } else {
-                        myapp.song_time
-                            .unwrap_or_else(Instant::now)
-                            .elapsed()
-                    };
-                    let new_time = elapsed_time.saturating_add(Duration::from_secs(5));
-                    myapp.song_time = Some(Instant::now() - new_time);
-
-                    let source = source.skip_duration(new_time);
-
-                    let sink = sink.lock().unwrap();
-                    sink.clear();
-                    sink.append(source);
-                    sink.play();
-                }
-            }*/
         }
         KeyEvent {
             code: KeyCode::Left,
@@ -466,36 +439,11 @@ pub fn handle_key_event(
             if let Some(current_id) = myapp.currently_playing_song {
                 if let Some(_) = myapp.songs.iter().find(|song| song.id == current_id) {
                     let sink = sink.lock().unwrap();
-                    let current_position = sink.get_pos();
-                    let new_position = current_position.saturating_sub(Duration::from_secs(5));
+                    let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
                     sink.try_seek(new_position).unwrap();
                     myapp.song_time = Some(new_position);
                 }
             }
-            /*if let Some(current_id) = myapp.currently_playing_song {
-                if let Some(current_song) = myapp.songs.iter().find(|song| song.id == current_id) {
-                    let file = fs::File::open(&current_song.path).unwrap();
-                    let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-
-                    let elapsed_time = if let Some(paused_time) = myapp.paused_time {
-                        myapp.song_time
-                            .unwrap_or_else(Duration::default)
-                            .saturating_sub(paused_time)
-                    } else {
-                        myapp.song_time
-                            .unwrap_or_else(Duration::default)
-                    };
-                    let new_time = elapsed_time.saturating_sub(Duration::from_secs(5));
-                    myapp.song_time = Some(Duration::now() - new_time);
-
-                    let source = source.skip_duration(new_time);
-
-                    let sink = sink.lock().unwrap();
-                    sink.clear();
-                    sink.append(source);
-                    sink.play();
-                }
-            }*/
         }
         KeyEvent {
             code: KeyCode::F(1),
@@ -576,6 +524,22 @@ pub fn handle_key_event(
                 myapp.playlists.remove(&name);
                 myapp.selected_playlist_index = 0;
             }
+        }
+        KeyEvent {
+            code: KeyCode::Char('r'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        } => {
+            myapp.repeat_song = !myapp.repeat_song;
+        }
+        KeyEvent {
+            code: KeyCode::Char('f'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        } => {
+            myapp.repeat_playlist = !myapp.repeat_playlist;
         }
         _ => {}
     }

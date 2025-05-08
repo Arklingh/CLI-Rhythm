@@ -25,6 +25,7 @@ use audiotags::{types::Album, Tag};
 use dirs;
 use image::{load_from_memory_with_format, ImageFormat};
 use mp3_metadata::read_from_file;
+use rand::{rng, seq::SliceRandom};
 use std::env;
 use std::fmt;
 use std::fs;
@@ -55,6 +56,7 @@ pub enum SortCriteria {
     Title,
     Artist,
     Duration,
+    Shuffle,
 }
 
 impl SortCriteria {
@@ -63,7 +65,8 @@ impl SortCriteria {
         match self {
             SortCriteria::Title => SortCriteria::Artist,
             SortCriteria::Artist => SortCriteria::Duration,
-            SortCriteria::Duration => SortCriteria::Title,
+            SortCriteria::Duration => SortCriteria::Shuffle,
+            SortCriteria::Shuffle => SortCriteria::Title,
         }
     }
 }
@@ -77,6 +80,7 @@ impl fmt::Display for SortCriteria {
                 SortCriteria::Title => "Title",
                 SortCriteria::Artist => "Artist",
                 SortCriteria::Duration => "Duration",
+                SortCriteria::Shuffle => "Shuffled",
             }
         )
     }
@@ -219,6 +223,10 @@ pub fn sort_songs(songs: &mut Vec<Song>, criteria: &SortCriteria) {
                     .partial_cmp(&b.duration)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
+        }
+        SortCriteria::Shuffle => {
+            let mut rand = rng();
+            songs.shuffle(&mut rand);
         }
     }
 }
