@@ -76,7 +76,6 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - [x] **Adaptivity to Different Screen Resolutions**: Ensure app's defined behaviour for different resolutions.
 
 ## Known Issues
-- Fast consecutive song's volume and progress changes move the progress bar back.   
 - If you encounter any problems, please [open an issue](https://github.com/Arklingh/CLI-Rhythm/issues).
 
 ## License
