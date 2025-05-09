@@ -425,7 +425,9 @@ pub fn handle_key_event(
                 if let Some(_) = myapp.songs.iter().find(|song| song.id == current_id) {
                     let sink = sink.lock().unwrap();
                     let new_position = sink.get_pos() + Duration::from_secs(5);
-                    sink.try_seek(new_position).unwrap();
+                    if let Ok(_) = sink.try_seek(new_position) {
+                    } else {
+                    };
                     myapp.song_time = Some(new_position);
                 }
             }
@@ -532,14 +534,6 @@ pub fn handle_key_event(
             state: KeyEventState::NONE,
         } => {
             myapp.repeat_song = !myapp.repeat_song;
-        }
-        KeyEvent {
-            code: KeyCode::Char('f'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
-            myapp.repeat_playlist = !myapp.repeat_playlist;
         }
         _ => {}
     }

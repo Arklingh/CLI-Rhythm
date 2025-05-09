@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
      // Run event loop
     loop {
         myapp.song_time = Some(sink.lock().unwrap().get_pos());
-        
+      
         let search_bar_title = match myapp.search_criteria {
             SearchCriteria::Title => "Search by Title",
             SearchCriteria::Artist => "Search by Artist",
@@ -210,47 +210,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
-            if let Some(song) = myapp.find_song_by_id(current_song_id).cloned() {
-                if song.is_playing && myapp.song_time.unwrap().as_secs_f64() >= song.duration {
-                    if myapp.repeat_song {
-                        let file = fs::File::open(&song.path).unwrap();
+            let mut song = myapp.find_song_by_id(current_song_id).cloned().unwrap(); 
+            if song.is_playing && (song.duration - myapp.song_time.unwrap().as_secs_f64() < 0.1 || song.duration < myapp.song_time.unwrap().as_secs_f64()) {
+                if myapp.repeat_song {
+                    let file = fs::File::open(&song.path).unwrap();
+                    let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+                    myapp.paused_time = None;
+                    sink.lock().unwrap().clear();
+                    sink.lock().unwrap().append(source);
+                    sink.lock().unwrap().play();
+                } else {
+                    dbg!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+                    song.is_playing = false;
+
+                    let next_index = myapp
+                        .filtered_songs
+                        .iter()
+                        .position(|s| s.id == current_song_id)
+                        .map(|idx| (idx + 1) % myapp.filtered_songs.len())
+                        .unwrap_or(0);
+
+                    if let Some(next_song) = myapp.find_song_by_id(myapp.filtered_songs[next_index].id) {
+                        next_song.is_playing = true;
+                        let file = fs::File::open(&next_song.path).unwrap();
                         let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
+                        myapp.currently_playing_song =
+                            Some(myapp.filtered_songs[next_index].id);
+                        myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
                         myapp.paused_time = None;
+                        myapp.filtered_songs[next_index].is_playing = true;
                         sink.lock().unwrap().clear();
                         sink.lock().unwrap().append(source);
                         sink.lock().unwrap().play();
-                    } else {
-                        if let Some(current_song) = myapp.find_song_by_id(current_song_id) {
-                            current_song.is_playing = false;
-                        }
-
-                        let next_index = myapp
-                            .filtered_songs
-                            .iter()
-                            .position(|s| s.id == current_song_id)
-                            .map(|idx| (idx + 1) % myapp.filtered_songs.len())
-                            .unwrap_or(0);
-
-                        // Play the next song
-                        let next_song = myapp
-                            .find_song_by_id(myapp.filtered_songs[next_index].id)
-                            .cloned();
-
-                        if let Some(song) = next_song {
-                            let file = fs::File::open(&song.path).unwrap();
-                            let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                            myapp.currently_playing_song =
-                                Some(myapp.filtered_songs[next_index].id);
-                            myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
-                            myapp.paused_time = None;
-                            myapp.filtered_songs[next_index].is_playing = true; // !!!!!BIG PROBLEMO!!!!
-                            sink.lock().unwrap().clear();
-                            sink.lock().unwrap().append(source);
-                            sink.lock().unwrap().play();
-                        }                    
-                    }
+                    }                    
                 }
             }
+        
         }
 
         let song_id = myapp
@@ -423,7 +418,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect();
 
             let playlist_list = List::new(playlist_items)
-                .block(Block::default().borders(Borders::ALL).title(format!("Playlists------Repeat:{}", if myapp.repeat_playlist {"✅"} else {"❌"})))
+                .block(Block::default().borders(Borders::ALL).title("Playlists"))
                 .highlight_style(
                     Style::default()
                         .fg(Color::Yellow)

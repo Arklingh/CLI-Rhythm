@@ -66,7 +66,6 @@ cli-rhythm scans your system's default music folder for music files. If it doesn
 - Enter: Create a new playlist with given name
 - Ctrl + X: Delete selected playlist
 - Ctrl + R: Enable/disable song repeat
-- Ctrl + F: Enable/disable playlist repeat
 - F1: Toggle Controls Popup
 - Esc or F1: Close Popup
 

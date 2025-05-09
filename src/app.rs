@@ -48,7 +48,6 @@ pub struct MyApp {
     pub paused_time: Option<Duration>,
     pub chosen_song_ids: Vec<Uuid>,
     pub song_time: Option<Duration>,
-    pub repeat_playlist: bool,
     pub repeat_song: bool,
 }
 
@@ -75,7 +74,6 @@ impl MyApp {
             paused_time: None,
             chosen_song_ids: vec![],
             song_time: None,
-            repeat_playlist: false,
             repeat_song: false,
         }
     }
