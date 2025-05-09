@@ -20,10 +20,9 @@ use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
-use serde_json;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
@@ -127,16 +126,22 @@ impl MyApp {
     /// # Returns
     /// A `Result` indicating success or failure.
     pub fn save_playlist(&self) -> std::io::Result<()> {
-        let serialized = serde_json::to_string(&self.playlists)?;
-
         if let Some(roaming_dir) = dirs::config_local_dir() {
             let myapp_dir: PathBuf = roaming_dir.join("cli-rhythm");
             std::fs::create_dir_all(&myapp_dir)?;
 
-            let playlist_file_path = myapp_dir.join("data.json");
+            for (playlist_name, song_uuids) in &self.playlists {
+                let playlist_file_path = myapp_dir.join(format!("{playlist_name}.m3u"));
+                let mut file = File::create(playlist_file_path)?;
 
-            let mut file = File::create(playlist_file_path)?;
-            file.write_all(serialized.as_bytes())?;
+                writeln!(file, "#EXTM3U")?;
+
+                for uuid in song_uuids {
+                    if let Some(song) = self.songs.iter().find(|song| song.id == *uuid) {
+                        writeln!(file, "{}", song.path.display())?;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -150,9 +155,37 @@ impl MyApp {
     /// # Returns
     /// A `Result` indicating success or failure.
     pub fn load_playlists(&mut self, filepath: &str) -> std::io::Result<()> {
-        let file = File::open(filepath)?;
-        let playlists: BTreeMap<String, Vec<Uuid>> = serde_json::from_reader(file)?;
-        self.playlists = playlists;
+        let mut loaded_playlists: BTreeMap<String, Vec<Uuid>> = BTreeMap::new();
+
+        // Read all .m3u files
+        for entry in std::fs::read_dir(&filepath)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("m3u") {
+                let file = File::open(&path)?;
+                let reader = BufReader::new(file);
+                let mut song_uuids = Vec::new();
+
+                for line in reader.lines() {
+                    let line = line?;
+                    if line.starts_with("#") || line.trim().is_empty() {
+                        continue; // skip comments or empty lines
+                    }
+
+                    let abs_path = PathBuf::from(line);
+                    let uuid =
+                        Uuid::new_v5(&Uuid::NAMESPACE_DNS, abs_path.to_str().unwrap().as_bytes());
+                    song_uuids.push(uuid);
+                }
+
+                if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                    loaded_playlists.insert(filename.to_string(), song_uuids);
+                }
+            }
+        }
+
+        self.playlists = loaded_playlists;
         Ok(())
     }
 }

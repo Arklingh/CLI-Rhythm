@@ -57,7 +57,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         dirs::config_local_dir()
             .unwrap()
             .join("cli-rhythm")
-            .join("data.json")
             .to_str()
             .unwrap(),
     ) {
