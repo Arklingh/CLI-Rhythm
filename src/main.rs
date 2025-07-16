@@ -220,7 +220,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     sink.lock().unwrap().append(source);
                     sink.lock().unwrap().play();
                 } else {
-                    dbg!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
                     song.is_playing = false;
 
                     let next_index = myapp

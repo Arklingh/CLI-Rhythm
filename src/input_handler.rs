@@ -21,6 +21,8 @@ use crate::app::MyApp;
 use crate::utils::SearchCriteria;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use rodio::Sink;
+use std::fs::{self};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
@@ -525,6 +527,11 @@ pub fn handle_key_event(
             if let Some(name) = playlist_name {
                 myapp.playlists.remove(&name);
                 myapp.selected_playlist_index = 0;
+                if let Some(roaming_dir) = dirs::config_local_dir() {
+                    let myapp_dir: PathBuf = roaming_dir.join("cli-rhythm");
+                    let playlist_file_path = myapp_dir.join(format!("{name}.m3u"));
+                    let playlist_file = fs::remove_file(playlist_file_path);
+                }
             }
         }
         KeyEvent {
