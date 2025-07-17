@@ -530,7 +530,7 @@ pub fn handle_key_event(
                 if let Some(roaming_dir) = dirs::config_local_dir() {
                     let myapp_dir: PathBuf = roaming_dir.join("cli-rhythm");
                     let playlist_file_path = myapp_dir.join(format!("{name}.m3u"));
-                    let playlist_file = fs::remove_file(playlist_file_path);
+                    let _ = fs::remove_file(playlist_file_path);
                 }
             }
         }
