@@ -21,12 +21,12 @@ mod input_handler;
 
 use app::MyApp;
 use crossterm::event::{poll, Event};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear};
-use crossterm::ExecutableCommand;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen};
+use crossterm::{execute, ExecutableCommand};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect };
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Text;
-use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph};
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
 use rodio::{OutputStream, Sink};
@@ -40,11 +40,11 @@ use utils::sort_songs;
 use ui::{draw_popup, draw_playlist_name_input_popup};
 use utils::SearchCriteria;
 use textwrap::wrap;
-use image::{ImageBuffer, Rgba, DynamicImage};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
+    execute!(stdout(), EnterAlternateScreen)?;
     let mut terminal = ratatui::init();
     let picker = Picker::from_fontsize((7, 14));
     let stop_signal = Arc::new(AtomicBool::new(false));
@@ -65,8 +65,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     myapp.load_songs();
 
-    let mut visible_song_count: usize = 0;
-    let mut visible_playlist_count: usize = 0;
+    let mut playlist_scroll_state = ListState::default();
+    let mut song_scroll_state = ListState::default();
 
     sort_songs(&mut myapp.songs, &myapp.sort_criteria);
 
@@ -77,7 +77,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
      // Run event loop
     loop {
         myapp.song_time = Some(sink.lock().unwrap().get_pos());
-      
+
+        if let Some(index) = song_scroll_state.selected() {
+            myapp.selected_song_id = Some(myapp.filtered_songs[index].id);
+        }
+
+        if let Some(playlist_index) = playlist_scroll_state.selected() {
+            myapp.selected_playlist_index = playlist_index;
+        };
+        
         let search_bar_title = match myapp.search_criteria {
             SearchCriteria::Title => "Search by Title",
             SearchCriteria::Artist => "Search by Artist",
@@ -197,16 +205,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let playing_song_cover = if let Some(song_id) = myapp.currently_playing_song {
             myapp.find_song_by_id(song_id)
                 .and_then(|song| song.cover.clone())
-                .unwrap_or_else(|| {
-                    let img = ImageBuffer::from_fn(4, 4, |_, _| Rgba([0, 0, 0, 0]));
-                    DynamicImage::ImageRgba8(img)
-                })
         } else {
-                let img = ImageBuffer::from_fn(4, 4, |_, _| Rgba([0, 0, 0, 0]));
-                DynamicImage::ImageRgba8(img)
+            None
         };
-        let mut pic = picker.new_resize_protocol(playing_song_cover);
-        let img = StatefulImage::default();
         
         // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
@@ -237,7 +238,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             Some(myapp.filtered_songs[next_index].id);
                         myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
                         myapp.paused_time = None;
-                        myapp.filtered_songs[next_index].is_playing = true;
                         sink.lock().unwrap().clear();
                         sink.lock().unwrap().append(source);
                         sink.lock().unwrap().play();
@@ -361,28 +361,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ])
                 .split(song_tab_layout[1]);
 
-            visible_playlist_count = (chunks[0].height - 2) as usize;
-            visible_song_count = (chunks[1].height - 2) as usize;
-
             let song_items: Vec<ListItem> = myapp
                 .filtered_songs
                 .iter()
                 .enumerate()
-                .skip(myapp.list_offset)
-                .take(visible_song_count as usize)
                 .map(|(index, song)| {
                     let mut style = Style::default();
                     if myapp.chosen_song_ids.contains(&myapp.songs[index].id) {
                         style = Style::default()
                             .fg(Color::LightRed)
                             .add_modifier(Modifier::RAPID_BLINK);
-                    }
-                    if let Some(selected_id) = myapp.selected_song_id {
-                        if selected_id == song.id {
-                            style = Style::default()
-                                .fg(Color::LightBlue)
-                                .add_modifier(Modifier::BOLD);
-                        }
                     }
                     ListItem::new(song.title.clone()).style(style)
                 })
@@ -405,14 +393,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .playlists
                 .iter()
                 .enumerate()
-                .map(|(index, (playlist_name, _songs))| {
-                    let mut style = Style::default();
-                    if myapp.selected_playlist_index == index {
-                        style = Style::default()
-                            .fg(Color::LightBlue)
-                            .add_modifier(Modifier::BOLD);
-                    }
-                    ListItem::new(playlist_name.clone()).style(style)
+                .map(|(_index, (playlist_name, _songs))| {
+                    ListItem::new(playlist_name.clone())
                 })
                 .collect();
 
@@ -425,10 +407,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
             playlist_bounds = Some(chunks[0]);
-            f.render_widget(playlist_list, chunks[0]);
+            f.render_stateful_widget(playlist_list, chunks[0], &mut playlist_scroll_state);
             song_list_bounds = Some(chunks[1]);
-            f.render_widget(song_list, chunks[1]);
-
+            f.render_stateful_widget(song_list, chunks[1], &mut song_scroll_state);
+                         
             let songs_info = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -446,7 +428,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(playing_song_block.inner(songs_info[1]));
 
             f.render_widget(playing_song_info, inner_layout[0]);
-            f.render_stateful_widget(img, inner_layout[1], &mut pic);
+            if let Some(cover) = playing_song_cover {
+                let mut pic = picker.new_resize_protocol(cover);
+                let img = StatefulImage::default();
+                f.render_stateful_widget(img, inner_layout[1], &mut pic);
+            }
             f.render_widget(playing_song_block, songs_info[1]);
             
             let footer = Layout::default()
@@ -481,7 +467,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if poll(Duration::from_millis(200))? {
             match crossterm::event::read()? {
                 Event::Key(key) => {
-                    input_handler::handle_key_event(key, &mut myapp, &sink, visible_song_count, visible_playlist_count, &mut exit_code);
+                    input_handler::handle_key_event(key, &mut myapp, &sink, &mut exit_code , &mut playlist_scroll_state, &mut song_scroll_state);
                     if exit_code {
                         break;
                     }

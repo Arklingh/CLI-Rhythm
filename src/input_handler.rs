@@ -20,6 +20,7 @@
 use crate::app::MyApp;
 use crate::utils::SearchCriteria;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+use ratatui::widgets::ListState;
 use rodio::Sink;
 use std::fs::{self};
 use std::path::PathBuf;
@@ -31,9 +32,9 @@ pub fn handle_key_event(
     key: KeyEvent,
     myapp: &mut MyApp,
     sink: &Arc<Mutex<Sink>>,
-    visible_song_count: usize,
-    visible_playlist_count: usize,
     exit_flag: &mut bool,
+    playlist_scroll_state: &mut ListState,
+    song_scroll_state: &mut ListState,
 ) {
     match key {
         KeyEvent {
@@ -51,47 +52,14 @@ pub fn handle_key_event(
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         } => {
-            if let Some(selected_id) = myapp.selected_song_id {
-                // Find the index of the currently selected song by Uuid
-                if let Some(index) = myapp
-                    .filtered_songs
-                    .iter()
-                    .position(|song| song.id == selected_id)
-                {
-                    if index < myapp.filtered_songs.len() - 1 {
-                        let next_song = &myapp.filtered_songs[index + 1];
-                        myapp.selected_song_id = Some(next_song.id);
-
-                        // Scroll down if selected index goes out of view
-                        if let Some(new_index) = myapp
-                            .filtered_songs
-                            .iter()
-                            .position(|song| song.id == myapp.selected_song_id.unwrap())
-                        {
-                            if new_index >= myapp.list_offset + visible_song_count - 1 {
-                                myapp.list_offset = (new_index - visible_song_count + 2).max(0);
-
-                                // Ensure the list_offset does not exceed the maximum allowed offset
-                                myapp.list_offset = myapp.list_offset.min(
-                                    myapp
-                                        .filtered_songs
-                                        .len()
-                                        .saturating_sub(visible_song_count),
-                                );
-                            }
-                        }
-                    } else {
-                        // Wrap around to the beginning
-                        let first_song = &myapp.filtered_songs[0];
-                        myapp.selected_song_id = Some(first_song.id);
-                        myapp.list_offset = 0;
-                    }
+            if let Some(curr_index) = song_scroll_state.selected() {
+                if myapp.filtered_songs.get(curr_index + 1).is_some() {
+                    song_scroll_state.select_next();
+                } else {
+                    song_scroll_state.select_first();
                 }
-            } else if !myapp.filtered_songs.is_empty() {
-                // Select the first song if none is selected
-                let first_song = &myapp.filtered_songs[0];
-                myapp.selected_song_id = Some(first_song.id);
-                myapp.list_offset = 0;
+            } else {
+                song_scroll_state.select_first();
             }
         }
         KeyEvent {
@@ -100,39 +68,14 @@ pub fn handle_key_event(
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         } => {
-            if let Some(selected_id) = myapp.selected_song_id {
-                // Find the index of the currently selected song by Uuid
-                if let Some(index) = myapp
-                    .filtered_songs
-                    .iter()
-                    .position(|song| song.id == selected_id)
-                {
-                    if index > 0 {
-                        let previous_song = &myapp.filtered_songs[index - 1];
-                        myapp.selected_song_id = Some(previous_song.id);
-
-                        // Scroll up if selected index goes out of view
-                        if index <= myapp.list_offset + 1 {
-                            myapp.list_offset = myapp.list_offset.saturating_sub(1);
-                        }
-                    } else {
-                        // Wrap around to the last song
-                        let last_song = &myapp.filtered_songs[myapp.filtered_songs.len() - 1];
-                        myapp.selected_song_id = Some(last_song.id);
-                        myapp.list_offset = myapp
-                            .filtered_songs
-                            .len()
-                            .saturating_sub(visible_song_count);
-                    }
+            if let Some(curr_index) = song_scroll_state.selected() {
+                if myapp.filtered_songs.get(curr_index - 1).is_some() {
+                    song_scroll_state.select_previous();
+                } else {
+                    song_scroll_state.select(Some(myapp.filtered_songs.len() - 1));
                 }
-            } else if !myapp.filtered_songs.is_empty() {
-                // Select the last song if none is selected
-                let last_song = &myapp.filtered_songs[myapp.filtered_songs.len() - 1];
-                myapp.selected_song_id = Some(last_song.id);
-                myapp.list_offset = myapp
-                    .filtered_songs
-                    .len()
-                    .saturating_sub(visible_song_count);
+            } else {
+                song_scroll_state.select_first();
             }
         }
         KeyEvent {
@@ -141,25 +84,15 @@ pub fn handle_key_event(
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         } => {
-            // Move playlist selection down
-            if myapp.selected_playlist_index < myapp.playlists.len() - 1 {
-                myapp.selected_playlist_index = myapp.selected_playlist_index + 1;
-                if myapp.selected_playlist_index
-                    >= myapp.playlist_list_offset + visible_playlist_count - 1
-                {
-                    myapp.playlist_list_offset =
-                        (myapp.selected_playlist_index - visible_playlist_count + 2).max(0);
-
-                    // Ensure the playlist_list_offset does not exceed the maximum allowed offset
-                    myapp.playlist_list_offset = myapp
-                        .playlist_list_offset
-                        .min(myapp.playlists.len().saturating_sub(visible_playlist_count));
+            if let Some(curr_index) = playlist_scroll_state.selected() {
+                if curr_index != myapp.playlists.len() - 1 {
+                    playlist_scroll_state.select_next();
+                } else {
+                    playlist_scroll_state.select_first();
                 }
             } else {
-                myapp.selected_playlist_index = 0;
-                myapp.playlist_list_offset = 0;
+                playlist_scroll_state.select_first();
             }
-            myapp.selected_song_id = None;
         }
         KeyEvent {
             code: KeyCode::Char('k'),
@@ -167,20 +100,15 @@ pub fn handle_key_event(
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         } => {
-            // Move playlist selection up
-            if myapp.selected_playlist_index > 0 {
-                myapp.selected_playlist_index = myapp.selected_playlist_index - 1;
-
-                // Scroll up if selected index goes out of view
-                if myapp.selected_playlist_index <= myapp.playlist_list_offset + 1 {
-                    myapp.playlist_list_offset = myapp.playlist_list_offset.saturating_sub(1);
+            if let Some(curr_index) = playlist_scroll_state.selected() {
+                if curr_index != 0 {
+                    playlist_scroll_state.select_previous();
+                } else {
+                    playlist_scroll_state.select(Some(myapp.playlists.len() - 1));
                 }
             } else {
-                myapp.selected_playlist_index = myapp.playlists.len() - 1;
-                myapp.playlist_list_offset =
-                    myapp.playlists.len().saturating_sub(visible_playlist_count);
+                playlist_scroll_state.select_first();
             }
-            myapp.selected_song_id = None;
         }
         KeyEvent {
             code: KeyCode::Char(' '),
