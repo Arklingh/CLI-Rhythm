@@ -1,6 +1,6 @@
 [package]
 name = "CLI-Rhythm"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["Andrii <andriikurochka@ukr.net>"]
 description = "A simple and functional CLI music player."
