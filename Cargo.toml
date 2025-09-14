@@ -8,8 +8,7 @@ readme = "README.md"
 keywords = ["cli", "player", "music", "minimal", "rhythm"]
 categories = ["command-line-utilities", "multimedia::audio"]
 repository = "https://github.com/Arklingh/CLI-Rhythm"
-licence = "Apache-2.0"
-license-file = "LICENSE"
+license = "Apache-2.0"
 
 [dependencies]
 audiotags = "0.5.0"

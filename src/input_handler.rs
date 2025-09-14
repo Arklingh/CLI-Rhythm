@@ -125,9 +125,10 @@ pub fn handle_key_event(
                     if myapp.currently_playing_song.is_none()
                         || Some(selected_id) != myapp.currently_playing_song
                     {
-                        sink.lock().unwrap().clear();
                         let selected_song = &myapp.filtered_songs[index];
-                        selected_song.play(&sink);
+                        if let Err(e) = selected_song.play(&sink) {
+                            eprintln!("Error playing song: {}", e);
+                        }
                         myapp.song_time = Some(Duration::default());
                         myapp.currently_playing_song = Some(selected_id);
 
@@ -137,7 +138,10 @@ pub fn handle_key_event(
                         }
                     } else {
                         // Stop the currently playing song
-                        sink.lock().unwrap().clear();
+                        {
+                            let sink_guard = sink.lock().unwrap();
+                            sink_guard.clear();
+                        }
                         myapp.song_time = None;
                         myapp.currently_playing_song = None;
 
@@ -207,7 +211,9 @@ pub fn handle_key_event(
                             .iter()
                             .find(|song| song.id == previous_id)
                         {
-                            previous_song.play(&sink);
+                            if let Err(e) = previous_song.play(&sink) {
+                                eprintln!("Error playing previous song: {}", e);
+                            }
                             myapp.currently_playing_song = Some(previous_id);
                             myapp.selected_song_id = Some(previous_id);
                             myapp.song_time = Some(Duration::default());
@@ -235,7 +241,9 @@ pub fn handle_key_event(
                         if let Some(next_song) =
                             myapp.filtered_songs.iter().find(|song| song.id == next_id)
                         {
-                            next_song.play(&sink);
+                            if let Err(e) = next_song.play(&sink) {
+                                eprintln!("Error playing next song: {}", e);
+                            }
                             myapp.selected_song_id = Some(next_id);
                             myapp.currently_playing_song = Some(next_id);
                             myapp.song_time = Some(Duration::default());

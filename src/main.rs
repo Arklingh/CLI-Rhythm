@@ -53,15 +53,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
 
     let mut myapp = MyApp::new();
-    match myapp.load_playlists(
-        dirs::config_local_dir()
-            .unwrap()
-            .join("cli-rhythm")
-            .to_str()
-            .unwrap(),
-    ) {
-        Ok(_) => {}
-        Err(_) => {}
+    if let Some(config_dir) = dirs::config_local_dir() {
+        let config_path = config_dir.join("cli-rhythm");
+        if let Some(path_str) = config_path.to_str() {
+            if let Err(e) = myapp.load_playlists(path_str) {
+                eprintln!("Warning: Could not load playlists: {}", e);
+            }
+        } else {
+            eprintln!("Warning: Could not convert config path to string");
+        }
+    } else {
+        eprintln!("Warning: Could not find config directory");
     }
     myapp.load_songs();
 
@@ -70,8 +72,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sort_songs(&mut myapp.songs, &myapp.sort_criteria);
 
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).unwrap()));
+    let (_stream, stream_handle) = OutputStream::try_default()
+        .map_err(|e| {
+            eprintln!("Error: Could not initialize audio output: {}", e);
+            e
+        })?;
+    let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle)
+        .map_err(|e| {
+            eprintln!("Error: Could not create audio sink: {}", e);
+            e
+        })?));
 
     let mut time_thread: Option<std::thread::JoinHandle<()>> = None;
      // Run event loop
@@ -106,32 +116,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => &String::new(),
         };
 
-        let playlist_songs = match myapp.playlists.get(playlist_name) {
+        let _playlist_songs = match myapp.playlists.get(playlist_name) {
             Some(songs) => songs,
             None => &vec![],
         };
 
-        // Filter songs based on search text
-        myapp.filtered_songs = myapp
-            .songs
-            .iter()
-            .filter(|s| match myapp.search_criteria {
-                SearchCriteria::Title => s
-                    .title
-                    .to_lowercase()
-                    .contains(&myapp.search_text.to_lowercase()),
-                SearchCriteria::Artist => s
-                    .artist
-                    .to_lowercase()
-                    .contains(&myapp.search_text.to_lowercase()),
-                SearchCriteria::Album => s
-                    .album
-                    .to_lowercase()
-                    .contains(&myapp.search_text.to_lowercase()),
-            })
-            .filter(|song| playlist_songs.contains(&song.id))
-            .cloned()
-            .collect();
+        // Update filtered songs with caching
+        myapp.update_filtered_songs();
 
         if let Some(selected_id) = myapp.selected_song_id {
             if !myapp
@@ -365,9 +356,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .filtered_songs
                 .iter()
                 .enumerate()
-                .map(|(index, song)| {
+                .map(|(_index, song)| {
                     let mut style = Style::default();
-                    if myapp.chosen_song_ids.contains(&myapp.songs[index].id) {
+                    if myapp.chosen_song_ids.contains(&song.id) {
                         style = Style::default()
                             .fg(Color::LightRed)
                             .add_modifier(Modifier::RAPID_BLINK);

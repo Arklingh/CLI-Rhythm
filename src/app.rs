@@ -30,7 +30,7 @@ use uuid::Uuid;
 /// The main application struct.
 #[allow(dead_code)]
 pub struct MyApp {
-    pub songs: Box<Vec<Song>>, // List of all songs
+    pub songs: Vec<Song>, // List of all songs
     pub filtered_songs: Vec<Song>,
     pub selected_song_id: Option<Uuid>, // Index of the currently selected song
     pub currently_playing_song: Option<Uuid>, // Index of the currently playing song
@@ -49,6 +49,11 @@ pub struct MyApp {
     pub chosen_song_ids: Vec<Uuid>,
     pub song_time: Option<Duration>,
     pub repeat_song: bool,
+    // Caching fields for performance
+    pub last_search_text: String,
+    pub last_search_criteria: SearchCriteria,
+    pub last_playlist_index: usize,
+    pub filter_cache_valid: bool,
 }
 
 #[allow(dead_code)]
@@ -56,7 +61,7 @@ impl MyApp {
     // Initialize a new MyApp instance with default values
     pub fn new() -> MyApp {
         MyApp {
-            songs: Box::new(Vec::new()),
+            songs: Vec::new(),
             filtered_songs: Vec::new(),
             selected_song_id: None,
             currently_playing_song: None,
@@ -75,12 +80,17 @@ impl MyApp {
             chosen_song_ids: vec![],
             song_time: None,
             repeat_song: false,
+            // Initialize caching fields
+            last_search_text: String::new(),
+            last_search_criteria: SearchCriteria::Title,
+            last_playlist_index: 0,
+            filter_cache_valid: false,
         }
     }
 
     // Function to load songs into the app
     pub fn load_songs(&mut self) {
-        self.songs = Box::new(scan_folder_for_music());
+        self.songs = scan_folder_for_music();
         let ids: Vec<Uuid> = self.songs.iter().map(|song| song.id).collect();
         self.playlists.insert("All Songs".to_string(), ids);
         self.sort_songs(); // Sort based on current criteria after loading
@@ -97,8 +107,10 @@ impl MyApp {
 
     // Function to stop the current song
     pub fn stop_song(&mut self) {
-        if let Some(index) = self.currently_playing_song {
-            self.songs[index.as_u128() as usize].is_playing = false;
+        if let Some(song_id) = self.currently_playing_song {
+            if let Some(song) = self.songs.iter_mut().find(|s| s.id == song_id) {
+                song.is_playing = false;
+            }
             self.currently_playing_song = None;
         }
     }
@@ -117,6 +129,50 @@ impl MyApp {
     // Sort the list of songs based on the current sort criteria
     pub fn sort_songs(&mut self) {
         sort_songs(&mut self.songs, &self.sort_criteria);
+        self.filter_cache_valid = false; // Invalidate cache when sorting changes
+    }
+
+    // Update filtered songs with caching for performance
+    pub fn update_filtered_songs(&mut self) {
+        // Check if we need to update the cache
+        let needs_update = !self.filter_cache_valid ||
+            self.search_text != self.last_search_text ||
+            self.search_criteria != self.last_search_criteria ||
+            self.selected_playlist_index != self.last_playlist_index;
+
+        if !needs_update {
+            return; // Use cached results
+        }
+
+        let playlist_name = match self.playlists.keys().nth(self.selected_playlist_index) {
+            Some(name) => name,
+            None => &String::new(),
+        };
+
+        let playlist_songs = match self.playlists.get(playlist_name) {
+            Some(songs) => songs,
+            None => &vec![],
+        };
+
+        // Filter songs based on search text using cached lowercase strings
+        let search_text_lower = self.search_text.to_lowercase();
+        self.filtered_songs = self
+            .songs
+            .iter()
+            .filter(|s| match self.search_criteria {
+                SearchCriteria::Title => s.title_lower.contains(&search_text_lower),
+                SearchCriteria::Artist => s.artist_lower.contains(&search_text_lower),
+                SearchCriteria::Album => s.album_lower.contains(&search_text_lower),
+            })
+            .filter(|song| playlist_songs.contains(&song.id))
+            .cloned()
+            .collect();
+
+        // Update cache state
+        self.last_search_text = self.search_text.clone();
+        self.last_search_criteria = self.search_criteria.clone();
+        self.last_playlist_index = self.selected_playlist_index;
+        self.filter_cache_valid = true;
     }
 
     /// Saves the current playlists to a file.

@@ -44,6 +44,7 @@ impl PopupState {
 }
 
 /// Enum representing the criteria for searching songs.
+#[derive(PartialEq, Clone)]
 pub enum SearchCriteria {
     Title,
     Artist,
@@ -124,7 +125,8 @@ pub fn scan_folder_for_music() -> Vec<Song> {
         }
         Err(e) => {
             eprintln!("Error reading directory: {}", e);
-            panic!("awawawa");
+            eprintln!("Please ensure the directory exists and you have read permissions.");
+            return Vec::new(); // Return empty vector instead of panicking
         }
     };
 
@@ -133,15 +135,13 @@ pub fn scan_folder_for_music() -> Vec<Song> {
         let current_song;
         if song.ends_with("mp3") {
             let mp3_meta = read_from_file(&song).unwrap();
-            let mp3_clone = read_from_file(&song).unwrap();
-            let mp3_a = read_from_file(&song).unwrap();
 
             current_song = Song::new(
-                mp3_meta.tag.unwrap().title,
-                mp3_a.tag.unwrap().artist,
+                mp3_meta.tag.as_ref().unwrap().title.clone(),
+                mp3_meta.tag.as_ref().unwrap().artist.clone(),
                 None,
                 song.clone(),
-                mp3_clone.tag.unwrap().album,
+                mp3_meta.tag.as_ref().unwrap().album.clone(),
                 mp3_meta.duration.as_secs_f64(),
             );
         } else {
