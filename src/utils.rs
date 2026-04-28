@@ -21,7 +21,7 @@
 //! - The system gracefully handles cases where metadata or song files are missing or incomplete.
 
 use crate::song::Song;
-use audiotags::{types::Album, Tag};
+use audiotags::Tag;
 use dirs;
 use image::{load_from_memory_with_format, ImageFormat};
 use mp3_metadata::read_from_file;
@@ -29,6 +29,7 @@ use rand::{rng, seq::SliceRandom};
 use std::env;
 use std::fmt;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 pub const MUSIC_FORMATS: [&str; 4] = ["mp3", "wav", "flac", "aac"];
@@ -87,107 +88,76 @@ impl fmt::Display for SortCriteria {
     }
 }
 
+/// Additional func to safely parse metadata
+/// Returns Option<Song> to allow filter_map to skip bad files
+fn parse_song_metadata(path: &Path) -> Option<Song> {
+    let ext = path.extension().and_then(|e| e.to_str())?;
+
+    // Read safely through .ok()?. If file is bad - break and return None
+    let meta = Tag::new().read_from_path(path).ok()?;
+
+    // Cover
+    let cover = meta.album_cover().and_then(|cover| {
+        let format = match cover.mime_type {
+            audiotags::MimeType::Jpeg => ImageFormat::Jpeg,
+            audiotags::MimeType::Png => ImageFormat::Png,
+            audiotags::MimeType::Gif => ImageFormat::Gif,
+            audiotags::MimeType::Bmp => ImageFormat::Bmp,
+            audiotags::MimeType::Tiff => ImageFormat::Tiff,
+        };
+        load_from_memory_with_format(cover.data, format).ok()
+    });
+
+    // Unified length logic(read_from_file for mp3, standart for else)
+    let duration = if ext == "mp3" {
+        read_from_file(path)
+            .map(|mp3_meta| mp3_meta.duration.as_secs_f64())
+            .unwrap_or_else(|_| meta.duration().unwrap_or(0.0))
+    } else {
+        meta.duration().unwrap_or(0.0)
+    };
+
+    Some(Song::new(
+        meta.title().unwrap_or("No Title").to_string(),
+        meta.artist().unwrap_or("Unknown Artist").to_string(), // Змінив "No Title" на логічніше "Unknown Artist"
+        cover,
+        path.to_path_buf(),
+        meta.album()
+            .map(|a| a.title.to_string())
+            .unwrap_or_else(|| "None".to_string()),
+        duration,
+    ))
+}
+
 pub fn scan_folder_for_music() -> Vec<Song> {
-    let current_folder = match dirs::audio_dir() {
-        Some(dir) => dir,
-        None => env::current_dir().unwrap(),
-    };
+    // Dir
+    let current_folder = dirs::audio_dir().unwrap_or_else(|| env::current_dir().unwrap());
 
-    let song_paths = match fs::read_dir(&current_folder) {
-        Ok(entries) => {
-            let music_files: Vec<PathBuf> = entries
-                .filter_map(|entry| {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        if path.is_file() {
-                            if let Some(ext) = path.extension() {
-                                if let Some(ext_str) = ext.to_str() {
-                                    if MUSIC_FORMATS.contains(&ext_str) {
-                                        Some(path)
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
+    // Scan and filter through iters
+    let song_paths: Vec<PathBuf> = fs::read_dir(&current_folder)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok) // Ігноруємо помилки доступу до окремих файлів
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file()) // Беремо тільки файли
+                .filter(|path| {
+                    // Checking extention
+                    path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .is_some_and(|ext_str| MUSIC_FORMATS.contains(&ext_str))
                 })
-                .collect();
-            music_files
-        }
-        Err(e) => {
-            eprintln!("Error reading directory: {}", e);
+                .collect()
+        })
+        .unwrap_or_else(|e| {
+            eprintln!("Error reading directory: {e}");
             eprintln!("Please ensure the directory exists and you have read permissions.");
-            return Vec::new(); // Return empty vector instead of panicking
-        }
-    };
+            Vec::new()
+        });
 
-    let mut song_list: Vec<Song> = Vec::new();
-    for song in song_paths {
-        let current_song;
-        if song.ends_with("mp3") {
-            let mp3_meta = read_from_file(&song).unwrap();
-
-            current_song = Song::new(
-                mp3_meta.tag.as_ref().unwrap().title.clone(),
-                mp3_meta.tag.as_ref().unwrap().artist.clone(),
-                None,
-                song.clone(),
-                mp3_meta.tag.as_ref().unwrap().album.clone(),
-                mp3_meta.duration.as_secs_f64(),
-            );
-        } else {
-            let mut mp3_duration: f64 = 0.0;
-            if song.extension().unwrap().to_str().unwrap() == "mp3" {
-                mp3_duration = read_from_file(&song).unwrap().duration.as_secs_f64();
-            }
-            let meta = Tag::new().read_from_path(&song).unwrap();
-
-            current_song = Song::new(
-                meta.title().unwrap_or("No Title").to_string(),
-                meta.artist().unwrap_or("No Title").to_string(),
-                {
-                    meta.album_cover().and_then(|cover| {
-                        let format = match cover.mime_type {
-                            audiotags::MimeType::Jpeg => ImageFormat::Jpeg,
-                            audiotags::MimeType::Png => ImageFormat::Png,
-                            audiotags::MimeType::Gif => ImageFormat::Gif,
-                            audiotags::MimeType::Bmp => ImageFormat::Bmp,
-                            audiotags::MimeType::Tiff => ImageFormat::Tiff,
-                        };
-
-                        load_from_memory_with_format(cover.data, format).ok()
-                    })
-                },
-                song.clone(),
-                meta.album()
-                    .unwrap_or(Album {
-                        title: "None",
-                        artist: None,
-                        cover: None,
-                    })
-                    .title
-                    .to_string(),
-                if let Some(ext) = song.extension().and_then(|e| e.to_str()) {
-                    match ext {
-                        "mp3" => mp3_duration,
-                        _ => meta.duration().unwrap_or(0.0_f64),
-                    }
-                } else {
-                    meta.duration().unwrap_or(0.0_f64)
-                },
-            );
-        }
-        song_list.push(current_song);
-    }
+    let mut song_list: Vec<Song> = song_paths
+        .into_iter()
+        .filter_map(|path| parse_song_metadata(&path))
+        .collect();
 
     if song_list.is_empty() {
         song_list.push(Song::new(
@@ -195,14 +165,8 @@ pub fn scan_folder_for_music() -> Vec<Song> {
             "No Title".to_string(),
             None,
             PathBuf::new(),
-            Album {
-                title: "None",
-                artist: None,
-                cover: None,
-            }
-            .title
-            .to_string(),
-            0.0_f64,
+            "None".to_string(),
+            0.0,
         ));
     }
 

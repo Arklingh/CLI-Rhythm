@@ -19,7 +19,7 @@
 
 use crate::app::MyApp;
 use crate::utils::SearchCriteria;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
 use rodio::Sink;
 use std::fs::{self};
@@ -36,22 +36,16 @@ pub fn handle_key_event(
     playlist_scroll_state: &mut ListState,
     song_scroll_state: &mut ListState,
 ) {
-    match key {
-        KeyEvent {
-            code: KeyCode::Char('q'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+    if key.kind != KeyEventKind::Press {
+        return;
+    }
+
+    match (key.code, key.modifiers) {
+        (KeyCode::Char('q'), KeyModifiers::CONTROL) => {
             let _ = myapp.save_playlist();
             *exit_flag = true;
         }
-        KeyEvent {
-            code: KeyCode::Down,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Down, KeyModifiers::NONE) => {
             if let Some(curr_index) = song_scroll_state.selected() {
                 if myapp.filtered_songs.get(curr_index + 1).is_some() {
                     song_scroll_state.select_next();
@@ -62,12 +56,7 @@ pub fn handle_key_event(
                 song_scroll_state.select_first();
             }
         }
-        KeyEvent {
-            code: KeyCode::Up,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Up, KeyModifiers::NONE) => {
             if let Some(curr_index) = song_scroll_state.selected() {
                 if myapp.filtered_songs.get(curr_index - 1).is_some() {
                     song_scroll_state.select_previous();
@@ -78,12 +67,7 @@ pub fn handle_key_event(
                 song_scroll_state.select_first();
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('j'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('j'), KeyModifiers::CONTROL) => {
             if let Some(curr_index) = playlist_scroll_state.selected() {
                 if curr_index != myapp.playlists.len() - 1 {
                     playlist_scroll_state.select_next();
@@ -94,12 +78,7 @@ pub fn handle_key_event(
                 playlist_scroll_state.select_first();
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('k'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
             if let Some(curr_index) = playlist_scroll_state.selected() {
                 if curr_index != 0 {
                     playlist_scroll_state.select_previous();
@@ -110,12 +89,7 @@ pub fn handle_key_event(
                 playlist_scroll_state.select_first();
             }
         }
-        KeyEvent {
-            code: KeyCode::Char(' '),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char(' '), KeyModifiers::CONTROL) => {
             if let Some(selected_id) = myapp.selected_song_id {
                 if let Some(index) = myapp
                     .filtered_songs
@@ -132,12 +106,10 @@ pub fn handle_key_event(
                         myapp.song_time = Some(Duration::default());
                         myapp.currently_playing_song = Some(selected_id);
 
-                        // Set is_playing field to true
                         if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == selected_id) {
                             song.is_playing = true;
                         }
                     } else {
-                        // Stop the currently playing song
                         {
                             let sink_guard = sink.lock().unwrap();
                             sink_guard.clear();
@@ -145,7 +117,6 @@ pub fn handle_key_event(
                         myapp.song_time = None;
                         myapp.currently_playing_song = None;
 
-                        // Set is_playing field to false
                         if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == selected_id) {
                             song.is_playing = false;
                         }
@@ -153,22 +124,15 @@ pub fn handle_key_event(
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('p'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
             if sink.lock().unwrap().is_paused() {
                 if let Some(current_id) = myapp.currently_playing_song {
                     if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
                         sink.lock().unwrap().play();
                         song.is_playing = true;
                     }
-                    // Calculate elapsed time during the pause
                     if let Some(paused_at) = myapp.paused_time {
-                        let elapsed_during_pause = paused_at;
-                        myapp.song_time = myapp.song_time.map(|t| t + elapsed_during_pause);
+                        myapp.song_time = myapp.song_time.map(|t| t + paused_at);
                         myapp.paused_time = None;
                     }
                 }
@@ -177,26 +141,15 @@ pub fn handle_key_event(
                     if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
                         sink.lock().unwrap().pause();
                         song.is_playing = false;
-                        // Record the time when playback was paused
                         myapp.paused_time = Some(Duration::default());
                     }
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('c'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
             myapp.playlist_input_popup.visible = true;
         }
-        KeyEvent {
-            code: KeyCode::Char('h'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('h'), KeyModifiers::CONTROL) => {
             if let Some(current_id) = myapp.currently_playing_song {
                 if let Some(current_index) = myapp
                     .filtered_songs
@@ -217,18 +170,13 @@ pub fn handle_key_event(
                             myapp.currently_playing_song = Some(previous_id);
                             myapp.selected_song_id = Some(previous_id);
                             myapp.song_time = Some(Duration::default());
-                            myapp.paused_time = None; // Reset paused time when starting a new song
+                            myapp.paused_time = None;
                         }
                     }
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('l'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('l'), KeyModifiers::CONTROL) => {
             if let Some(current_id) = myapp.currently_playing_song {
                 if let Some(current_index) = myapp
                     .filtered_songs
@@ -247,169 +195,95 @@ pub fn handle_key_event(
                             myapp.selected_song_id = Some(next_id);
                             myapp.currently_playing_song = Some(next_id);
                             myapp.song_time = Some(Duration::default());
-                            myapp.paused_time = None; // Reset paused time when starting a new song
+                            myapp.paused_time = None;
                         }
                     }
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Left,
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
-            // Decrease volume by 5%
+        (KeyCode::Left, KeyModifiers::CONTROL) => {
             let sink = &mut sink.lock().unwrap();
             let volume = sink.volume();
             if volume >= 0.05 {
                 sink.set_volume(volume - 0.05);
             }
         }
-        KeyEvent {
-            code: KeyCode::Right,
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
-            // Increase volume by 5%
+        (KeyCode::Right, KeyModifiers::CONTROL) => {
             let sink = &mut sink.lock().unwrap();
             let volume = sink.volume();
             if volume <= 0.95 {
                 sink.set_volume(volume + 0.05);
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('m'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('m'), KeyModifiers::CONTROL) => {
             let sink = &mut sink.lock().unwrap();
             if sink.volume() > 0.0 {
-                // Mute music
-                myapp.previous_volume = sink.volume(); // Save current volume
+                myapp.previous_volume = sink.volume();
                 sink.set_volume(0.0);
             } else {
-                // Unmute music
-                sink.set_volume(myapp.previous_volume); // Restore previous volume
+                sink.set_volume(myapp.previous_volume);
             }
         }
-        KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char(c), KeyModifiers::NONE) => {
             if myapp.playlist_input_popup.visible {
                 myapp.playlist_name_input.push(c);
             } else {
                 myapp.search_text.push(c);
             }
         }
-        KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::SHIFT,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char(c), KeyModifiers::SHIFT) => {
             if myapp.playlist_input_popup.visible {
-                myapp
-                    .playlist_name_input
-                    .push(c.to_uppercase().last().unwrap());
+                myapp.playlist_name_input.extend(c.to_uppercase());
             } else {
-                myapp.search_text.push(c.to_uppercase().last().unwrap());
+                myapp.search_text.extend(c.to_uppercase());
             }
         }
-        KeyEvent {
-            code: KeyCode::Backspace,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Backspace, KeyModifiers::NONE) => {
             if myapp.playlist_input_popup.visible {
                 myapp.playlist_name_input.pop();
             } else {
                 myapp.search_text.pop();
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('s'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('s'), KeyModifiers::CONTROL) => {
             myapp.search_criteria = match myapp.search_criteria {
                 SearchCriteria::Title => SearchCriteria::Artist,
                 SearchCriteria::Artist => SearchCriteria::Album,
                 SearchCriteria::Album => SearchCriteria::Title,
             };
         }
-        KeyEvent {
-            code: KeyCode::Char('t'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('t'), KeyModifiers::CONTROL) => {
             myapp.set_sort_criteria(myapp.sort_criteria.next());
         }
-        KeyEvent {
-            code: KeyCode::Right,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Right, KeyModifiers::NONE) => {
             if let Some(current_id) = myapp.currently_playing_song {
-                if let Some(_) = myapp.songs.iter().find(|song| song.id == current_id) {
+                if myapp.songs.iter().any(|song| song.id == current_id) {
                     let sink = sink.lock().unwrap();
                     let new_position = sink.get_pos() + Duration::from_secs(5);
-                    if let Ok(_) = sink.try_seek(new_position) {
-                    } else {
-                    };
+                    let _ = sink.try_seek(new_position);
                     myapp.song_time = Some(new_position);
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Left,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Left, KeyModifiers::NONE) => {
             if let Some(current_id) = myapp.currently_playing_song {
-                if let Some(_) = myapp.songs.iter().find(|song| song.id == current_id) {
+                if myapp.songs.iter().any(|song| song.id == current_id) {
                     let sink = sink.lock().unwrap();
                     let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
-                    sink.try_seek(new_position).unwrap();
+                    let _ = sink.try_seek(new_position);
                     myapp.song_time = Some(new_position);
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::F(1),
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::F(1), KeyModifiers::NONE) => {
             myapp.hint_popup_state.toggle();
         }
-        KeyEvent {
-            code: KeyCode::Esc,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
-            // Close the popup if it's open
+        (KeyCode::Esc, KeyModifiers::NONE) => {
             myapp.playlist_input_popup.visible = false;
-            myapp.playlist_name_input = String::new();
+            myapp.playlist_name_input.clear();
             myapp.hint_popup_state.visible = false;
         }
-        KeyEvent {
-            code: KeyCode::Enter,
-            modifiers: KeyModifiers::NONE,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Enter, KeyModifiers::NONE) => {
             match (
                 myapp.playlist_name_input.is_empty(),
                 myapp.chosen_song_ids.is_empty(),
@@ -429,31 +303,18 @@ pub fn handle_key_event(
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('a'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
             let selected_song_id = myapp
                 .selected_song_id
-                .unwrap_or(Uuid::new_v5(&Uuid::NAMESPACE_DNS, b"rust-lang.org"));
-            match myapp.chosen_song_ids.contains(&selected_song_id) {
-                true => {
-                    myapp.chosen_song_ids.retain(|id| *id != selected_song_id);
-                }
-                false => {
-                    myapp.chosen_song_ids.push(selected_song_id);
-                }
+                .unwrap_or_else(|| Uuid::new_v5(&Uuid::NAMESPACE_DNS, b"rust-lang.org"));
+
+            if myapp.chosen_song_ids.contains(&selected_song_id) {
+                myapp.chosen_song_ids.retain(|id| *id != selected_song_id);
+            } else {
+                myapp.chosen_song_ids.push(selected_song_id);
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('x'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
-            // Get the playlist name at the selected index
+        (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
             let playlist_name = myapp
                 .playlists
                 .keys()
@@ -470,12 +331,7 @@ pub fn handle_key_event(
                 }
             }
         }
-        KeyEvent {
-            code: KeyCode::Char('r'),
-            modifiers: KeyModifiers::CONTROL,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        } => {
+        (KeyCode::Char('r'), KeyModifiers::CONTROL) => {
             myapp.repeat_song = !myapp.repeat_song;
         }
         _ => {}

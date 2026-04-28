@@ -49,43 +49,13 @@ pub struct MyApp {
     pub chosen_song_ids: Vec<Uuid>,
     pub song_time: Option<Duration>,
     pub repeat_song: bool,
-    // Caching fields for performance
-    pub last_search_text: String,
-    pub last_search_criteria: SearchCriteria,
-    pub last_playlist_index: usize,
-    pub filter_cache_valid: bool,
 }
 
 #[allow(dead_code)]
 impl MyApp {
     // Initialize a new MyApp instance with default values
     pub fn new() -> MyApp {
-        MyApp {
-            songs: Vec::new(),
-            filtered_songs: Vec::new(),
-            selected_song_id: None,
-            currently_playing_song: None,
-            search_criteria: SearchCriteria::Title,
-            sort_criteria: SortCriteria::Title,
-            selected_playlist_index: 0,
-            hint_popup_state: PopupState { visible: false },
-            playlist_input_popup: PopupState { visible: false },
-            playlist_name_input: String::new(),
-            playlists: BTreeMap::new(),
-            search_text: String::new(),
-            previous_volume: 0.0,
-            list_offset: 0,
-            playlist_list_offset: 0,
-            paused_time: None,
-            chosen_song_ids: vec![],
-            song_time: None,
-            repeat_song: false,
-            // Initialize caching fields
-            last_search_text: String::new(),
-            last_search_criteria: SearchCriteria::Title,
-            last_playlist_index: 0,
-            filter_cache_valid: false,
-        }
+        Self::default()
     }
 
     // Function to load songs into the app
@@ -93,7 +63,7 @@ impl MyApp {
         self.songs = scan_folder_for_music();
         let ids: Vec<Uuid> = self.songs.iter().map(|song| song.id).collect();
         self.playlists.insert("All Songs".to_string(), ids);
-        self.sort_songs(); // Sort based on current criteria after loading
+        sort_songs(&mut self.songs, &self.sort_criteria);
     }
 
     // Function to handle song selection
@@ -123,56 +93,31 @@ impl MyApp {
     // Function to change sorting criteria
     pub fn set_sort_criteria(&mut self, criteria: SortCriteria) {
         self.sort_criteria = criteria;
-        self.sort_songs(); // Re-sort the songs based on new criteria
-    }
-
-    // Sort the list of songs based on the current sort criteria
-    pub fn sort_songs(&mut self) {
-        sort_songs(&mut self.songs, &self.sort_criteria);
-        self.filter_cache_valid = false; // Invalidate cache when sorting changes
+        sort_songs(&mut self.songs, &self.sort_criteria); // Re-sort the songs based on new criteria
     }
 
     // Update filtered songs with caching for performance
     pub fn update_filtered_songs(&mut self) {
-        // Check if we need to update the cache
-        let needs_update = !self.filter_cache_valid ||
-            self.search_text != self.last_search_text ||
-            self.search_criteria != self.last_search_criteria ||
-            self.selected_playlist_index != self.last_playlist_index;
+        let playlist_songs = self
+            .playlists
+            .values()
+            .nth(self.selected_playlist_index)
+            .map(|vec| vec.as_slice())
+            .unwrap_or(&[]);
 
-        if !needs_update {
-            return; // Use cached results
-        }
-
-        let playlist_name = match self.playlists.keys().nth(self.selected_playlist_index) {
-            Some(name) => name,
-            None => &String::new(),
-        };
-
-        let playlist_songs = match self.playlists.get(playlist_name) {
-            Some(songs) => songs,
-            None => &vec![],
-        };
-
-        // Filter songs based on search text using cached lowercase strings
         let search_text_lower = self.search_text.to_lowercase();
+
         self.filtered_songs = self
             .songs
             .iter()
             .filter(|s| match self.search_criteria {
-                SearchCriteria::Title => s.title_lower.contains(&search_text_lower),
-                SearchCriteria::Artist => s.artist_lower.contains(&search_text_lower),
-                SearchCriteria::Album => s.album_lower.contains(&search_text_lower),
+                SearchCriteria::Title => s.title.to_lowercase().contains(&search_text_lower),
+                SearchCriteria::Artist => s.artist.to_lowercase().contains(&search_text_lower),
+                SearchCriteria::Album => s.album.to_lowercase().contains(&search_text_lower),
             })
             .filter(|song| playlist_songs.contains(&song.id))
             .cloned()
             .collect();
-
-        // Update cache state
-        self.last_search_text = self.search_text.clone();
-        self.last_search_criteria = self.search_criteria.clone();
-        self.last_playlist_index = self.selected_playlist_index;
-        self.filter_cache_valid = true;
     }
 
     /// Saves the current playlists to a file.
@@ -239,7 +184,33 @@ impl MyApp {
             }
         }
 
-        self.playlists = loaded_playlists;
+        self.playlists.extend(loaded_playlists);
         Ok(())
+    }
+}
+
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            songs: Vec::new(),
+            filtered_songs: Vec::new(),
+            selected_song_id: None,
+            currently_playing_song: None,
+            search_criteria: SearchCriteria::Title,
+            sort_criteria: SortCriteria::Title,
+            selected_playlist_index: 0,
+            hint_popup_state: PopupState { visible: false },
+            playlist_input_popup: PopupState { visible: false },
+            playlist_name_input: String::new(),
+            playlists: BTreeMap::new(),
+            search_text: String::new(),
+            previous_volume: 0.0,
+            list_offset: 0,
+            playlist_list_offset: 0,
+            paused_time: None,
+            chosen_song_ids: vec![],
+            song_time: None,
+            repeat_song: false,
+        }
     }
 }

@@ -33,10 +33,6 @@ pub struct Song {
     pub album: String,
     pub duration: f64,
     pub is_playing: bool,
-    // Cached lowercase versions for performance
-    pub title_lower: String,
-    pub artist_lower: String,
-    pub album_lower: String,
 }
 
 impl Song {
@@ -48,10 +44,6 @@ impl Song {
         album: String,
         duration: f64,
     ) -> Self {
-        let title_lower = title.to_lowercase();
-        let artist_lower = artist.to_lowercase();
-        let album_lower = album.to_lowercase();
-        
         Song {
             id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, path.to_str().unwrap().as_bytes()),
             title,
@@ -61,9 +53,6 @@ impl Song {
             album,
             duration,
             is_playing: false,
-            title_lower,
-            artist_lower,
-            album_lower,
         }
     }
 
@@ -71,7 +60,9 @@ impl Song {
         let file = fs::File::open(&self.path)?;
         let source = rodio::Decoder::new(io::BufReader::new(file))?;
         {
-            let sink_guard = sink.lock().map_err(|_| "Failed to acquire audio sink lock")?;
+            let sink_guard = sink
+                .lock()
+                .map_err(|_| "Failed to acquire audio sink lock")?;
             sink_guard.clear();
             sink_guard.append(source);
             sink_guard.play();
