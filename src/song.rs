@@ -15,7 +15,7 @@
 //! - `image` for optional album cover handling.
 //! - `Arc<Mutex<Sink>>` for shared and safe control of audio playback across threads.
 
-use image::DynamicImage;
+use image::{DynamicImage, ImageFormat};
 use rodio::Sink;
 use std::fs;
 use std::io;
@@ -28,7 +28,8 @@ pub struct Song {
     pub id: Uuid,
     pub title: String,
     pub artist: String,
-    pub cover: Option<DynamicImage>,
+    pub cover_data: Option<Vec<u8>>, // Raw cover bytes, loaded on demand
+    pub cover_mime_type: Option<String>, // Mime type for decoding
     pub path: PathBuf,
     pub album: String,
     pub duration: f64,
@@ -36,10 +37,25 @@ pub struct Song {
 }
 
 impl Song {
+    /// Load cover image on demand (only when needed for display)
+    pub fn load_cover(&self) -> Option<Arc<DynamicImage>> {
+        let data = self.cover_data.as_ref()?;
+        let format = match self.cover_mime_type.as_deref() {
+            Some("image/jpeg") | Some("image/jpg") => ImageFormat::Jpeg,
+            Some("image/png") => ImageFormat::Png,
+            Some("image/gif") => ImageFormat::Gif,
+            Some("image/bmp") => ImageFormat::Bmp,
+            Some("image/tiff") => ImageFormat::Tiff,
+            _ => ImageFormat::Jpeg, // Default
+        };
+        image::load_from_memory_with_format(data, format).ok().map(Arc::new)
+    }
+
     pub fn new(
         title: String,
         artist: String,
-        cover: Option<DynamicImage>,
+        cover_data: Option<Vec<u8>>,
+        cover_mime_type: Option<String>,
         path: PathBuf,
         album: String,
         duration: f64,
@@ -52,7 +68,8 @@ impl Song {
             id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, path_str.as_bytes()),
             title,
             artist,
-            cover,
+            cover_data,
+            cover_mime_type,
             path,
             album,
             duration,

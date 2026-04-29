@@ -91,11 +91,6 @@ impl MyApp {
         }
     }
 
-    // Function to toggle popup visibility
-    pub fn toggle_popup(&mut self) {
-        self.hint_popup_state.toggle();
-    }
-
     // Function to change sorting criteria
     pub fn set_sort_criteria(&mut self, criteria: SortCriteria) {
         self.sort_criteria = criteria;
@@ -203,7 +198,7 @@ impl MyApp {
         Ok(())
     }
 
-    pub fn tick_audio_playback(&mut self, sink: &Arc<Mutex<Sink>>) {
+    pub fn tick(&mut self, sink: &Arc<Mutex<Sink>>) {
         if let Some(current_song_id) = self.currently_playing_song {
             // Find the song using songs_by_id for efficiency
             let song_clone = match self.songs_by_id.get(&current_song_id).cloned() {
@@ -275,24 +270,39 @@ impl MyApp {
 
     // Helper function to safely play a file, handling potential errors.
     fn play_file_safely(&mut self, path: &Path, sink: &Arc<Mutex<Sink>>) {
-        if let Ok(file) = File::open(path) {
-            let reader = BufReader::new(file);
-            if let Ok(source) = rodio::Decoder::new(reader) {
-                self.paused_time = None; // Reset pause time when starting a new file
-                let sink_guard = sink.lock().unwrap();
-                sink_guard.clear(); // Stop current playback
-                sink_guard.append(source);
-                sink_guard.play();
-                // `sink_guard` is dropped here, releasing the lock.
-
-                // Reset song time to start when a new file is played
-                self.song_time = Some(Duration::from_secs(0));
-            } else {
-                eprintln!("Error: Could not decode audio file: {}", path.display());
+        let file = match File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("Error: Could not open audio file: {} - {}", path.display(), e);
+                return;
             }
-        } else {
-            eprintln!("Error: Could not open audio file: {}", path.display());
-        }
+        };
+        
+        let reader = BufReader::new(file);
+        let source = match rodio::Decoder::new(reader) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: Could not decode audio file: {} - {}", path.display(), e);
+                return;
+            }
+        };
+        
+        let sink_guard = match sink.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("Warning: Audio sink lock was poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
+        
+        self.paused_time = None; // Reset pause time when starting a new file
+        sink_guard.clear(); // Stop current playback
+        sink_guard.append(source);
+        sink_guard.play();
+        // `sink_guard` is dropped here, releasing the lock.
+
+        // Reset song time to start when a new file is played
+        self.song_time = Some(Duration::from_secs(0));
     }
 }
 

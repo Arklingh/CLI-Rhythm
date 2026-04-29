@@ -114,7 +114,10 @@ pub fn handle_key_event(
                         } else {
                             // Stop the currently playing song
                             {
-                                let sink_guard = sink.lock().unwrap();
+                                let sink_guard = match sink.lock() {
+                                    Ok(guard) => guard,
+                                    Err(poisoned) => poisoned.into_inner(),
+                                };
                                 sink_guard.clear();
                             }
                             myapp.song_time = None;
@@ -129,7 +132,10 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
-            let sink_guard = sink.lock().unwrap();
+            let sink_guard = match sink.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             if sink_guard.is_paused() {
                 if let Some(current_id) = myapp.currently_playing_song {
                     if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
@@ -163,7 +169,9 @@ pub fn handle_key_event(
                 {
                     if current_index > 0 {
                         let previous_song = &myapp.filtered_songs[current_index - 1];
-                        sink.lock().unwrap().clear();
+                        if let Ok(sink_guard) = sink.lock() {
+                            sink_guard.clear();
+                        }
                         if let Err(e) = previous_song.play(&sink) {
                             eprintln!("Error playing previous song: {}", e);
                         }
@@ -184,7 +192,9 @@ pub fn handle_key_event(
                 {
                     if current_index < myapp.filtered_songs.len() - 1 {
                         let next_song = myapp.filtered_songs[current_index + 1].clone();
-                        sink.lock().unwrap().clear();
+                        if let Ok(sink_guard) = sink.lock() {
+                            sink_guard.clear();
+                        }
                         if let Err(e) = next_song.play(&sink) {
                             eprintln!("Error playing next song: {}", e);
                         }
@@ -197,26 +207,29 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Left, KeyModifiers::CONTROL) => {
-            let sink = &mut sink.lock().unwrap();
-            let volume = sink.volume();
-            if volume >= 0.05 {
-                sink.set_volume(volume - 0.05);
+            if let Ok(sink) = sink.lock().as_mut() {
+                let volume = sink.volume();
+                if volume >= 0.05 {
+                    sink.set_volume(volume - 0.05);
+                }
             }
         }
         (KeyCode::Right, KeyModifiers::CONTROL) => {
-            let sink = &mut sink.lock().unwrap();
-            let volume = sink.volume();
-            if volume <= 0.95 {
-                sink.set_volume(volume + 0.05);
+            if let Ok(sink) = sink.lock().as_mut() {
+                let volume = sink.volume();
+                if volume <= 0.95 {
+                    sink.set_volume(volume + 0.05);
+                }
             }
         }
         (KeyCode::Char('m'), KeyModifiers::CONTROL) => {
-            let sink = &mut sink.lock().unwrap();
-            if sink.volume() > 0.0 {
-                myapp.previous_volume = sink.volume();
-                sink.set_volume(0.0);
-            } else {
-                sink.set_volume(myapp.previous_volume);
+            if let Ok(sink) = sink.lock().as_mut() {
+                if sink.volume() > 0.0 {
+                    myapp.previous_volume = sink.volume();
+                    sink.set_volume(0.0);
+                } else {
+                    sink.set_volume(myapp.previous_volume);
+                }
             }
         }
         (KeyCode::Char(c), KeyModifiers::NONE) => {
@@ -252,18 +265,20 @@ pub fn handle_key_event(
         }
         (KeyCode::Right, KeyModifiers::NONE) => {
             if let Some(_) = myapp.currently_playing_song {
-                let sink = sink.lock().unwrap();
-                let new_position = sink.get_pos() + Duration::from_secs(5);
-                let _ = sink.try_seek(new_position);
-                myapp.song_time = Some(new_position);
+                if let Ok(sink) = sink.lock() {
+                    let new_position = sink.get_pos() + Duration::from_secs(5);
+                    let _ = sink.try_seek(new_position);
+                    myapp.song_time = Some(new_position);
+                }
             }
         }
         (KeyCode::Left, KeyModifiers::NONE) => {
             if let Some(_) = myapp.currently_playing_song {
-                let sink = sink.lock().unwrap();
-                let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
-                let _ = sink.try_seek(new_position);
-                myapp.song_time = Some(new_position);
+                if let Ok(sink) = sink.lock() {
+                    let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
+                    let _ = sink.try_seek(new_position);
+                    myapp.song_time = Some(new_position);
+                }
             }
         }
         (KeyCode::F(1), KeyModifiers::NONE) => {

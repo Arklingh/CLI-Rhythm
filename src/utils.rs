@@ -23,7 +23,6 @@
 use crate::song::Song;
 use audiotags::Tag;
 use dirs;
-use image::{load_from_memory_with_format, ImageFormat};
 use mp3_metadata::read_from_file;
 use rand::{rng, seq::SliceRandom};
 use std::env;
@@ -96,17 +95,17 @@ fn parse_song_metadata(path: &Path) -> Option<Song> {
     // Read safely through .ok()?. If file is bad - break and return None
     let meta = Tag::new().read_from_path(path).ok()?;
 
-    // Cover
-    let cover = meta.album_cover().and_then(|cover| {
-        let format = match cover.mime_type {
-            audiotags::MimeType::Jpeg => ImageFormat::Jpeg,
-            audiotags::MimeType::Png => ImageFormat::Png,
-            audiotags::MimeType::Gif => ImageFormat::Gif,
-            audiotags::MimeType::Bmp => ImageFormat::Bmp,
-            audiotags::MimeType::Tiff => ImageFormat::Tiff,
+    // Store raw cover bytes instead of decoded image (saves ~90% memory)
+    let (cover_data, cover_mime_type) = meta.album_cover().map(|cover| {
+        let mime = match cover.mime_type {
+            audiotags::MimeType::Jpeg => "image/jpeg",
+            audiotags::MimeType::Png => "image/png",
+            audiotags::MimeType::Gif => "image/gif",
+            audiotags::MimeType::Bmp => "image/bmp",
+            audiotags::MimeType::Tiff => "image/tiff",
         };
-        load_from_memory_with_format(cover.data, format).ok()
-    });
+        (cover.data.to_vec(), mime.to_string())
+    }).unzip();
 
     // Unified length logic(read_from_file for mp3, standart for else)
     let duration = if ext == "mp3" {
@@ -119,8 +118,9 @@ fn parse_song_metadata(path: &Path) -> Option<Song> {
 
     Song::new(
         meta.title().unwrap_or("No Title").to_string(),
-        meta.artist().unwrap_or("Unknown Artist").to_string(), // Змінив "No Title" на логічніше "Unknown Artist"
-        cover,
+        meta.artist().unwrap_or("Unknown Artist").to_string(),
+        cover_data,
+        cover_mime_type,
         path.to_path_buf(),
         meta.album()
             .map(|a| a.title.to_string())
@@ -163,6 +163,7 @@ pub fn scan_folder_for_music() -> Vec<Song> {
         song_list.push(Song::new(
             "No songs in \"Music\" and current directory!".to_string(),
             "No Title".to_string(),
+            None,
             None,
             PathBuf::new(),
             "None".to_string(),
