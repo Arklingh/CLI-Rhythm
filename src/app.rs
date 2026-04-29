@@ -20,15 +20,18 @@ use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
+use rodio::Sink;
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
 /// The main application struct.
-#[allow(dead_code)]
 pub struct MyApp {
     pub songs: Vec<Song>, // List of all songs (kept for iteration/sorting that needs Vec)
     pub songs_by_id: BTreeMap<Uuid, Song>, // Map for efficient song lookups by ID
@@ -45,14 +48,13 @@ pub struct MyApp {
     pub search_text: String,
     pub previous_volume: f32,
     pub list_offset: usize,
-    pub playlist_list_offset: usize,
+
     pub paused_time: Option<Duration>,
     pub chosen_song_ids: Vec<Uuid>,
     pub song_time: Option<Duration>,
     pub repeat_song: bool,
 }
 
-#[allow(dead_code)]
 impl MyApp {
     // Initialize a new MyApp instance with default values
     pub fn new() -> MyApp {
@@ -62,7 +64,10 @@ impl MyApp {
     // Function to load songs into the app
     pub fn load_songs(&mut self) {
         let loaded_songs = scan_folder_for_music();
-        self.songs_by_id = loaded_songs.into_iter().map(|song| (song.id, song)).collect();
+        self.songs_by_id = loaded_songs
+            .into_iter()
+            .map(|song| (song.id, song))
+            .collect();
         self.songs = self.songs_by_id.values().cloned().collect(); // Keep `songs` for sorting/iteration if needed by other parts of the app
 
         let ids: Vec<Uuid> = self.songs_by_id.keys().cloned().collect();
@@ -71,9 +76,6 @@ impl MyApp {
     }
 
     // Function to handle song selection
-    pub fn select_song(&mut self, index: Uuid) {
-        self.selected_song_id = Some(index);
-    }
 
     pub fn find_song_by_id(&mut self, id: Uuid) -> Option<&mut Song> {
         self.songs_by_id.get_mut(&id)
@@ -184,7 +186,10 @@ impl MyApp {
                         let uuid = Uuid::new_v5(&Uuid::NAMESPACE_DNS, path_str.as_bytes());
                         song_uuids.push(uuid);
                     } else {
-                        eprintln!("Warning: Could not convert path to string for UUID generation: {:?}", abs_path);
+                        eprintln!(
+                            "Warning: Could not convert path to string for UUID generation: {:?}",
+                            abs_path
+                        );
                     }
                 }
 
@@ -196,6 +201,98 @@ impl MyApp {
 
         self.playlists.extend(loaded_playlists);
         Ok(())
+    }
+
+    pub fn tick_audio_playback(&mut self, sink: &Arc<Mutex<Sink>>) {
+        if let Some(current_song_id) = self.currently_playing_song {
+            // Find the song using songs_by_id for efficiency
+            let song_clone = match self.songs_by_id.get(&current_song_id).cloned() {
+                Some(s) => s,
+                None => return, // Song not found, can't proceed
+            };
+
+            let current_time = self.song_time.unwrap_or_default().as_secs_f64();
+
+            // Check if song is finished
+            if song_clone.is_playing
+                && (song_clone.duration - current_time < 0.1 || song_clone.duration < current_time)
+            {
+                if self.repeat_song {
+                    // If repeat is on, replay the current song
+                    self.play_file_safely(&song_clone.path, sink);
+                } else {
+                    // Find the next song in the filtered list
+                    let current_song_index = self
+                        .filtered_songs
+                        .iter()
+                        .position(|s| s.id == current_song_id)
+                        .unwrap_or(0); // Default to 0 if not found, though it should be
+
+                    let next_song_id_option = self
+                        .filtered_songs
+                        .get((current_song_index + 1) % self.filtered_songs.len())
+                        .map(|s| s.id);
+
+                    if let Some(next_song_id) = next_song_id_option {
+                        // --- IMPORTANT: Extract path BEFORE any mutable borrows of self ---
+                        // Retrieve the path to the next song and clone it. This drops the
+                        // immutable borrow of `self` from `self.songs_by_id.get()` immediately.
+                        let next_song_path: Option<PathBuf> =
+                            self.songs_by_id.get(&next_song_id).map(|s| s.path.clone());
+
+                        // Update song state using mutable borrows
+                        if let Some(next_song) = self.find_song_by_id(next_song_id) {
+                            next_song.is_playing = true;
+                        }
+                        // Update global playback state
+                        self.currently_playing_song = Some(next_song_id);
+                        self.selected_song_id = Some(next_song_id); // Also select it
+
+                        // Now call play_file_safely with the cloned path
+                        if let Some(path) = next_song_path {
+                            self.play_file_safely(&path, sink);
+                        } else {
+                            // If song data is unexpectedly missing, stop playback
+                            eprintln!("Error: Song data not found for ID: {}", next_song_id);
+                            self.stop_song();
+                            self.song_time = None;
+                            self.paused_time = None;
+                        }
+                    } else {
+                        // No more songs or list is empty, stop playback
+                        self.stop_song(); // This will set currently_playing_song to None
+                        self.song_time = None;
+                        self.paused_time = None;
+                    }
+                }
+            }
+        } else {
+            // If no song is currently playing, reset related states
+            self.song_time = None;
+            self.paused_time = None;
+        }
+    }
+
+    // Helper function to safely play a file, handling potential errors.
+    fn play_file_safely(&mut self, path: &Path, sink: &Arc<Mutex<Sink>>) {
+        if let Ok(file) = File::open(path) {
+            let reader = BufReader::new(file);
+            if let Ok(source) = rodio::Decoder::new(reader) {
+                self.paused_time = None; // Reset pause time when starting a new file
+                let sink_guard = sink.lock().unwrap();
+                sink_guard.clear(); // Stop current playback
+                sink_guard.append(source);
+                sink_guard.play();
+                // `sink_guard` is dropped here, releasing the lock.
+
+                // Reset song time to start when a new file is played
+                self.song_time = Some(Duration::from_secs(0));
+            } else {
+                eprintln!("Error: Could not decode audio file: {}", path.display());
+            }
+        } else {
+            eprintln!("Error: Could not open audio file: {}", path.display());
+        }
     }
 }
 
@@ -217,7 +314,6 @@ impl Default for MyApp {
             search_text: String::new(),
             previous_volume: 0.0,
             list_offset: 0,
-            playlist_list_offset: 0,
             paused_time: None,
             chosen_song_ids: vec![],
             song_time: None,

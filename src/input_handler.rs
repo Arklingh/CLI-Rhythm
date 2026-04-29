@@ -89,10 +89,21 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Char(' '), KeyModifiers::CONTROL) => {
-            if let Some(selected_id) = myapp.selected_song_id { // Song is selected
-                if let Some(filtered_song) = myapp.filtered_songs.iter().find(|song| song.id == selected_id) { // Find the song
-                    if let Some(mut_song_in_app) = myapp.songs.iter_mut().find(|song| song.id == selected_id) { // Find the mutable song
-                        if myapp.currently_playing_song.is_none() || Some(selected_id) != myapp.currently_playing_song {
+            if let Some(selected_id) = myapp.selected_song_id {
+                // Song is selected
+                if let Some(filtered_song) = myapp
+                    .filtered_songs
+                    .iter()
+                    .find(|song| song.id == selected_id)
+                {
+                    // Find the song
+                    if let Some(mut_song_in_app) =
+                        myapp.songs.iter_mut().find(|song| song.id == selected_id)
+                    {
+                        // Find the mutable song
+                        if myapp.currently_playing_song.is_none()
+                            || Some(selected_id) != myapp.currently_playing_song
+                        {
                             // Play the song
                             if let Err(e) = filtered_song.play(&sink) {
                                 eprintln!("Error playing song: {}", e);
