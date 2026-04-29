@@ -43,9 +43,13 @@ impl Song {
         path: PathBuf,
         album: String,
         duration: f64,
-    ) -> Self {
-        Song {
-            id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, path.to_str().unwrap().as_bytes()),
+    ) -> Result<Self, String> {
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| format!("Invalid UTF-8 path: {:?}", path))?;
+
+        Ok(Song {
+            id: Uuid::new_v5(&Uuid::NAMESPACE_DNS, path_str.as_bytes()),
             title,
             artist,
             cover,
@@ -53,7 +57,7 @@ impl Song {
             album,
             duration,
             is_playing: false,
-        }
+        })
     }
 
     pub fn play(&self, sink: &Arc<Mutex<Sink>>) -> Result<(), Box<dyn std::error::Error>> {

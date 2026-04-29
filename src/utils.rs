@@ -117,7 +117,7 @@ fn parse_song_metadata(path: &Path) -> Option<Song> {
         meta.duration().unwrap_or(0.0)
     };
 
-    Some(Song::new(
+    Song::new(
         meta.title().unwrap_or("No Title").to_string(),
         meta.artist().unwrap_or("Unknown Artist").to_string(), // Змінив "No Title" на логічніше "Unknown Artist"
         cover,
@@ -126,7 +126,7 @@ fn parse_song_metadata(path: &Path) -> Option<Song> {
             .map(|a| a.title.to_string())
             .unwrap_or_else(|| "None".to_string()),
         duration,
-    ))
+    ).ok()
 }
 
 pub fn scan_folder_for_music() -> Vec<Song> {
@@ -167,7 +167,7 @@ pub fn scan_folder_for_music() -> Vec<Song> {
             PathBuf::new(),
             "None".to_string(),
             0.0,
-        ));
+        ).expect("Failed to create placeholder song; PathBuf::new() should always be valid for UUID generation."));
     }
 
     song_list

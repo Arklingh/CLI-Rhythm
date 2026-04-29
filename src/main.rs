@@ -13,17 +13,17 @@
 extern crate crossterm;
 extern crate ratatui;
 
-mod song;
 mod app;
+mod input_handler;
+mod song;
 mod ui;
 mod utils;
-mod input_handler;
 
 use app::MyApp;
 use crossterm::event::{poll, Event};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen};
 use crossterm::{execute, ExecutableCommand};
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect };
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph};
@@ -36,10 +36,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs, io};
+use ui::{draw_playlist_name_input_popup, draw_popup};
 use utils::sort_songs;
-use ui::{draw_popup, draw_playlist_name_input_popup};
 use utils::SearchCriteria;
-use textwrap::wrap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
@@ -72,19 +71,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sort_songs(&mut myapp.songs, &myapp.sort_criteria);
 
-    let (_stream, stream_handle) = OutputStream::try_default()
-        .map_err(|e| {
-            eprintln!("Error: Could not initialize audio output: {}", e);
-            e
-        })?;
-    let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle)
-        .map_err(|e| {
-            eprintln!("Error: Could not create audio sink: {}", e);
-            e
-        })?));
+    let (_stream, stream_handle) = OutputStream::try_default().map_err(|e| {
+        eprintln!("Error: Could not initialize audio output: {}", e);
+        e
+    })?;
+    let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).map_err(|e| {
+        eprintln!("Error: Could not create audio sink: {}", e);
+        e
+    })?));
 
     let mut time_thread: Option<std::thread::JoinHandle<()>> = None;
-     // Run event loop
+    // Run event loop
     loop {
         myapp.song_time = Some(sink.lock().unwrap().get_pos());
 
@@ -95,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(playlist_index) = playlist_scroll_state.selected() {
             myapp.selected_playlist_index = playlist_index;
         };
-        
+
         let search_bar_title = match myapp.search_criteria {
             SearchCriteria::Title => "Search by Title",
             SearchCriteria::Artist => "Search by Artist",
@@ -150,34 +147,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let selected_song_details = if let Some(song) = selected_song {
-            let contents = format!(
+            format!(
                 "Artist: {}\nSong: {}\nAlbum: {}\nDuration: {:02}:{:02}",
                 song.artist,
                 song.title,
                 song.album,
                 (song.duration / 60.0).floor(),
                 (song.duration % 60.0).round()
-            );
-            let wrapped_details = wrap(&contents, 29);
+            )
+            // let wrapped_details = wrap(&contents, 29);
 
-            wrapped_details.join("\n")
+            // wrapped_details.join("\n")
         } else {
             "No song selected".to_string()
         };
 
         let playing_song_details = if let Some(song_id) = myapp.currently_playing_song {
             let song = myapp.find_song_by_id(song_id).unwrap();
-            let contents = format!(
+            format!(
                 "Artist: {}\nSong: {}\nAlbum: {}\nDuration: {:02}:{:02}",
                 song.artist,
                 song.title,
                 song.album,
                 (song.duration / 60.0).floor(),
                 (song.duration % 60.0).round()
-            );
-            let wrapped_details = wrap(&contents, 29);
+            )
+            // let wrapped_details = wrap(&contents, 29);
 
-            wrapped_details.join("\n")
+            // wrapped_details.join("\n")
         } else {
             "No song playing".to_string()
         };
@@ -188,22 +185,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .borders(Borders::ALL)
                     .title("Selected Song"),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(Color::White))
+            .wrap(ratatui::widgets::Wrap { trim: true });
 
         let playing_song_info = Paragraph::new(playing_song_details)
-            .block(Block::default()).style(Style::default().fg(Color::White));
-        
+            .block(Block::default())
+            .style(Style::default().fg(Color::White));
+
         let playing_song_cover = if let Some(song_id) = myapp.currently_playing_song {
-            myapp.find_song_by_id(song_id)
+            myapp
+                .find_song_by_id(song_id)
                 .and_then(|song| song.cover.clone())
         } else {
             None
         };
-        
+
         // Check if a song is playing
         if let Some(current_song_id) = myapp.currently_playing_song {
-            let mut song = myapp.find_song_by_id(current_song_id).cloned().unwrap(); 
-            if song.is_playing && (song.duration - myapp.song_time.unwrap().as_secs_f64() < 0.1 || song.duration < myapp.song_time.unwrap().as_secs_f64()) {
+            let mut song = myapp.find_song_by_id(current_song_id).cloned().unwrap();
+            if song.is_playing
+                && (song.duration - myapp.song_time.unwrap().as_secs_f64() < 0.1
+                    || song.duration < myapp.song_time.unwrap().as_secs_f64())
+            {
                 if myapp.repeat_song {
                     let file = fs::File::open(&song.path).unwrap();
                     let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
@@ -221,21 +224,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .map(|idx| (idx + 1) % myapp.filtered_songs.len())
                         .unwrap_or(0);
 
-                    if let Some(next_song) = myapp.find_song_by_id(myapp.filtered_songs[next_index].id) {
+                    if let Some(next_song) =
+                        myapp.find_song_by_id(myapp.filtered_songs[next_index].id)
+                    {
                         next_song.is_playing = true;
                         let file = fs::File::open(&next_song.path).unwrap();
                         let source = rodio::Decoder::new(io::BufReader::new(file)).unwrap();
-                        myapp.currently_playing_song =
-                            Some(myapp.filtered_songs[next_index].id);
+                        myapp.currently_playing_song = Some(myapp.filtered_songs[next_index].id);
                         myapp.selected_song_id = Some(myapp.filtered_songs[next_index].id);
                         myapp.paused_time = None;
                         sink.lock().unwrap().clear();
                         sink.lock().unwrap().append(source);
                         sink.lock().unwrap().play();
-                    }                    
+                    }
                 }
             }
-        
         }
 
         let song_id = myapp
@@ -371,7 +374,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title(format!("Songs-------------------------------------------------------------------Sort by: {}", 
+                        .title(format!("Songs-------------------------------------------------------------------Sort by: {}",
                             myapp.sort_criteria.to_string(),))
                 )
                 .highlight_style(
@@ -401,7 +404,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             f.render_stateful_widget(playlist_list, chunks[0], &mut playlist_scroll_state);
             song_list_bounds = Some(chunks[1]);
             f.render_stateful_widget(song_list, chunks[1], &mut song_scroll_state);
-                         
+
             let songs_info = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -425,7 +428,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 f.render_stateful_widget(img, inner_layout[1], &mut pic);
             }
             f.render_widget(playing_song_block, songs_info[1]);
-            
+
             let footer = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
@@ -442,7 +445,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if myapp.playlist_input_popup.visible {
                 let _ = draw_playlist_name_input_popup(f, &myapp.playlist_name_input);
             }
-                
+
             f.render_widget(
                 hint,
                 Rect::new(
@@ -458,7 +461,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if poll(Duration::from_millis(200))? {
             match crossterm::event::read()? {
                 Event::Key(key) => {
-                    input_handler::handle_key_event(key, &mut myapp, &sink, &mut exit_code , &mut playlist_scroll_state, &mut song_scroll_state);
+                    input_handler::handle_key_event(
+                        key,
+                        &mut myapp,
+                        &sink,
+                        &mut exit_code,
+                        &mut playlist_scroll_state,
+                        &mut song_scroll_state,
+                    );
                     if exit_code {
                         break;
                     }

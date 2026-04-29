@@ -20,7 +20,7 @@ use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -30,17 +30,18 @@ use uuid::Uuid;
 /// The main application struct.
 #[allow(dead_code)]
 pub struct MyApp {
-    pub songs: Vec<Song>, // List of all songs
+    pub songs: Vec<Song>, // List of all songs (kept for iteration/sorting that needs Vec)
+    pub songs_by_id: BTreeMap<Uuid, Song>, // Map for efficient song lookups by ID
     pub filtered_songs: Vec<Song>,
-    pub selected_song_id: Option<Uuid>, // Index of the currently selected song
-    pub currently_playing_song: Option<Uuid>, // Index of the currently playing song
+    pub selected_song_id: Option<Uuid>, // ID of the currently selected song
+    pub currently_playing_song: Option<Uuid>, // ID of the currently playing song
     pub search_criteria: SearchCriteria, // Criteria to filter/search songs
     pub sort_criteria: SortCriteria,    // Criteria to sort songs
     pub hint_popup_state: PopupState,   // Controls the visibility of popups
     pub playlist_input_popup: PopupState,
     pub selected_playlist_index: usize,
     pub playlist_name_input: String, // Input buffer for the playlist name
-    pub playlists: BTreeMap<String, Vec<Uuid>>, // Playlists with song indices
+    pub playlists: BTreeMap<String, Vec<Uuid>>, // Playlists with song IDs
     pub search_text: String,
     pub previous_volume: f32,
     pub list_offset: usize,
@@ -60,10 +61,13 @@ impl MyApp {
 
     // Function to load songs into the app
     pub fn load_songs(&mut self) {
-        self.songs = scan_folder_for_music();
-        let ids: Vec<Uuid> = self.songs.iter().map(|song| song.id).collect();
+        let loaded_songs = scan_folder_for_music();
+        self.songs_by_id = loaded_songs.into_iter().map(|song| (song.id, song)).collect();
+        self.songs = self.songs_by_id.values().cloned().collect(); // Keep `songs` for sorting/iteration if needed by other parts of the app
+
+        let ids: Vec<Uuid> = self.songs_by_id.keys().cloned().collect();
         self.playlists.insert("All Songs".to_string(), ids);
-        sort_songs(&mut self.songs, &self.sort_criteria);
+        sort_songs(&mut self.songs, &self.sort_criteria); // Sort the `songs` vector
     }
 
     // Function to handle song selection
@@ -72,13 +76,13 @@ impl MyApp {
     }
 
     pub fn find_song_by_id(&mut self, id: Uuid) -> Option<&mut Song> {
-        self.songs.iter_mut().find(|song| song.id == id)
+        self.songs_by_id.get_mut(&id)
     }
 
     // Function to stop the current song
     pub fn stop_song(&mut self) {
         if let Some(song_id) = self.currently_playing_song {
-            if let Some(song) = self.songs.iter_mut().find(|s| s.id == song_id) {
+            if let Some(song) = self.songs_by_id.get_mut(&song_id) {
                 song.is_playing = false;
             }
             self.currently_playing_song = None;
@@ -98,12 +102,14 @@ impl MyApp {
 
     // Update filtered songs with caching for performance
     pub fn update_filtered_songs(&mut self) {
-        let playlist_songs = self
+        let playlist_song_ids: HashSet<Uuid> = self
             .playlists
             .values()
             .nth(self.selected_playlist_index)
-            .map(|vec| vec.as_slice())
-            .unwrap_or(&[]);
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
 
         let search_text_lower = self.search_text.to_lowercase();
 
@@ -115,7 +121,7 @@ impl MyApp {
                 SearchCriteria::Artist => s.artist.to_lowercase().contains(&search_text_lower),
                 SearchCriteria::Album => s.album.to_lowercase().contains(&search_text_lower),
             })
-            .filter(|song| playlist_songs.contains(&song.id))
+            .filter(|song| playlist_song_ids.contains(&song.id))
             .cloned()
             .collect();
     }
@@ -136,7 +142,7 @@ impl MyApp {
                 writeln!(file, "#EXTM3U")?;
 
                 for uuid in song_uuids {
-                    if let Some(song) = self.songs.iter().find(|song| song.id == *uuid) {
+                    if let Some(song) = self.songs_by_id.get(uuid) {
                         writeln!(file, "{}", song.path.display())?;
                     }
                 }
@@ -146,18 +152,18 @@ impl MyApp {
         Ok(())
     }
 
-    /// Loads playlists from a file.
+    /// Loads playlists from a directory.
     ///
     /// # Arguments
-    /// * `filepath` - The path to the file containing the playlists.
+    /// * `directory_path` - The path to the directory containing the playlists.
     ///
     /// # Returns
     /// A `Result` indicating success or failure.
-    pub fn load_playlists(&mut self, filepath: &str) -> std::io::Result<()> {
+    pub fn load_playlists(&mut self, directory_path: &str) -> std::io::Result<()> {
         let mut loaded_playlists: BTreeMap<String, Vec<Uuid>> = BTreeMap::new();
 
         // Read all .m3u files
-        for entry in std::fs::read_dir(&filepath)? {
+        for entry in std::fs::read_dir(&directory_path)? {
             let entry = entry?;
             let path = entry.path();
 
@@ -173,9 +179,13 @@ impl MyApp {
                     }
 
                     let abs_path = PathBuf::from(line);
-                    let uuid =
-                        Uuid::new_v5(&Uuid::NAMESPACE_DNS, abs_path.to_str().unwrap().as_bytes());
-                    song_uuids.push(uuid);
+                    // Ensure the path can be converted to a str before hashing
+                    if let Some(path_str) = abs_path.to_str() {
+                        let uuid = Uuid::new_v5(&Uuid::NAMESPACE_DNS, path_str.as_bytes());
+                        song_uuids.push(uuid);
+                    } else {
+                        eprintln!("Warning: Could not convert path to string for UUID generation: {:?}", abs_path);
+                    }
                 }
 
                 if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
@@ -193,6 +203,7 @@ impl Default for MyApp {
     fn default() -> Self {
         Self {
             songs: Vec::new(),
+            songs_by_id: BTreeMap::new(),
             filtered_songs: Vec::new(),
             selected_song_id: None,
             currently_playing_song: None,

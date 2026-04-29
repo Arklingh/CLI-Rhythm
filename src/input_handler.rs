@@ -26,7 +26,6 @@ use std::fs::{self};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use uuid::Uuid;
 
 pub fn handle_key_event(
     key: KeyEvent,
@@ -90,45 +89,40 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Char(' '), KeyModifiers::CONTROL) => {
-            if let Some(selected_id) = myapp.selected_song_id {
-                if let Some(index) = myapp
-                    .filtered_songs
-                    .iter()
-                    .position(|song| song.id == selected_id)
-                {
-                    if myapp.currently_playing_song.is_none()
-                        || Some(selected_id) != myapp.currently_playing_song
-                    {
-                        let selected_song = &myapp.filtered_songs[index];
-                        if let Err(e) = selected_song.play(&sink) {
-                            eprintln!("Error playing song: {}", e);
-                        }
-                        myapp.song_time = Some(Duration::default());
-                        myapp.currently_playing_song = Some(selected_id);
-
-                        if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == selected_id) {
-                            song.is_playing = true;
+            if let Some(selected_id) = myapp.selected_song_id { // Song is selected
+                if let Some(filtered_song) = myapp.filtered_songs.iter().find(|song| song.id == selected_id) { // Find the song
+                    if let Some(mut_song_in_app) = myapp.songs.iter_mut().find(|song| song.id == selected_id) { // Find the mutable song
+                        if myapp.currently_playing_song.is_none() || Some(selected_id) != myapp.currently_playing_song {
+                            // Play the song
+                            if let Err(e) = filtered_song.play(&sink) {
+                                eprintln!("Error playing song: {}", e);
+                            }
+                            myapp.song_time = Some(Duration::default());
+                            myapp.currently_playing_song = Some(selected_id);
+                            mut_song_in_app.is_playing = true;
+                        } else {
+                            // Stop the currently playing song
+                            {
+                                let sink_guard = sink.lock().unwrap();
+                                sink_guard.clear();
+                            }
+                            myapp.song_time = None;
+                            myapp.currently_playing_song = None;
+                            mut_song_in_app.is_playing = false;
                         }
                     } else {
-                        {
-                            let sink_guard = sink.lock().unwrap();
-                            sink_guard.clear();
-                        }
-                        myapp.song_time = None;
-                        myapp.currently_playing_song = None;
-
-                        if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == selected_id) {
-                            song.is_playing = false;
-                        }
+                        // Should not happen!
+                        eprintln!("Warning: Selected song in filtered list not found in main song collection.");
                     }
                 }
             }
         }
         (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
-            if sink.lock().unwrap().is_paused() {
+            let sink_guard = sink.lock().unwrap();
+            if sink_guard.is_paused() {
                 if let Some(current_id) = myapp.currently_playing_song {
                     if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
-                        sink.lock().unwrap().play();
+                        sink_guard.play();
                         song.is_playing = true;
                     }
                     if let Some(paused_at) = myapp.paused_time {
@@ -139,7 +133,7 @@ pub fn handle_key_event(
             } else {
                 if let Some(current_id) = myapp.currently_playing_song {
                     if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
-                        sink.lock().unwrap().pause();
+                        sink_guard.pause();
                         song.is_playing = false;
                         myapp.paused_time = Some(Duration::default());
                     }
@@ -157,21 +151,15 @@ pub fn handle_key_event(
                     .position(|song| song.id == current_id)
                 {
                     if current_index > 0 {
-                        let previous_id = myapp.filtered_songs[current_index - 1].id;
+                        let previous_song = &myapp.filtered_songs[current_index - 1];
                         sink.lock().unwrap().clear();
-                        if let Some(previous_song) = myapp
-                            .filtered_songs
-                            .iter()
-                            .find(|song| song.id == previous_id)
-                        {
-                            if let Err(e) = previous_song.play(&sink) {
-                                eprintln!("Error playing previous song: {}", e);
-                            }
-                            myapp.currently_playing_song = Some(previous_id);
-                            myapp.selected_song_id = Some(previous_id);
-                            myapp.song_time = Some(Duration::default());
-                            myapp.paused_time = None;
+                        if let Err(e) = previous_song.play(&sink) {
+                            eprintln!("Error playing previous song: {}", e);
                         }
+                        myapp.currently_playing_song = Some(previous_song.id);
+                        myapp.selected_song_id = Some(previous_song.id);
+                        myapp.song_time = Some(Duration::default());
+                        myapp.paused_time = None;
                     }
                 }
             }
@@ -184,19 +172,15 @@ pub fn handle_key_event(
                     .position(|song| song.id == current_id)
                 {
                     if current_index < myapp.filtered_songs.len() - 1 {
-                        let next_id = myapp.filtered_songs[current_index + 1].id;
+                        let next_song = myapp.filtered_songs[current_index + 1].clone();
                         sink.lock().unwrap().clear();
-                        if let Some(next_song) =
-                            myapp.filtered_songs.iter().find(|song| song.id == next_id)
-                        {
-                            if let Err(e) = next_song.play(&sink) {
-                                eprintln!("Error playing next song: {}", e);
-                            }
-                            myapp.selected_song_id = Some(next_id);
-                            myapp.currently_playing_song = Some(next_id);
-                            myapp.song_time = Some(Duration::default());
-                            myapp.paused_time = None;
+                        if let Err(e) = next_song.play(&sink) {
+                            eprintln!("Error playing next song: {}", e);
                         }
+                        myapp.selected_song_id = Some(next_song.id);
+                        myapp.currently_playing_song = Some(next_song.id);
+                        myapp.song_time = Some(Duration::default());
+                        myapp.paused_time = None;
                     }
                 }
             }
@@ -256,23 +240,19 @@ pub fn handle_key_event(
             myapp.set_sort_criteria(myapp.sort_criteria.next());
         }
         (KeyCode::Right, KeyModifiers::NONE) => {
-            if let Some(current_id) = myapp.currently_playing_song {
-                if myapp.songs.iter().any(|song| song.id == current_id) {
-                    let sink = sink.lock().unwrap();
-                    let new_position = sink.get_pos() + Duration::from_secs(5);
-                    let _ = sink.try_seek(new_position);
-                    myapp.song_time = Some(new_position);
-                }
+            if let Some(_) = myapp.currently_playing_song {
+                let sink = sink.lock().unwrap();
+                let new_position = sink.get_pos() + Duration::from_secs(5);
+                let _ = sink.try_seek(new_position);
+                myapp.song_time = Some(new_position);
             }
         }
         (KeyCode::Left, KeyModifiers::NONE) => {
-            if let Some(current_id) = myapp.currently_playing_song {
-                if myapp.songs.iter().any(|song| song.id == current_id) {
-                    let sink = sink.lock().unwrap();
-                    let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
-                    let _ = sink.try_seek(new_position);
-                    myapp.song_time = Some(new_position);
-                }
+            if let Some(_) = myapp.currently_playing_song {
+                let sink = sink.lock().unwrap();
+                let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
+                let _ = sink.try_seek(new_position);
+                myapp.song_time = Some(new_position);
             }
         }
         (KeyCode::F(1), KeyModifiers::NONE) => {
@@ -304,14 +284,12 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Char('a'), KeyModifiers::CONTROL) => {
-            let selected_song_id = myapp
-                .selected_song_id
-                .unwrap_or_else(|| Uuid::new_v5(&Uuid::NAMESPACE_DNS, b"rust-lang.org"));
-
-            if myapp.chosen_song_ids.contains(&selected_song_id) {
-                myapp.chosen_song_ids.retain(|id| *id != selected_song_id);
-            } else {
-                myapp.chosen_song_ids.push(selected_song_id);
+            if let Some(selected_id) = myapp.selected_song_id {
+                if myapp.chosen_song_ids.contains(&selected_id) {
+                    myapp.chosen_song_ids.retain(|id| *id != selected_id);
+                } else {
+                    myapp.chosen_song_ids.push(selected_id);
+                }
             }
         }
         (KeyCode::Char('x'), KeyModifiers::CONTROL) => {
