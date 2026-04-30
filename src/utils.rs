@@ -17,7 +17,7 @@
 //! - `sort_songs`: Sorts a vector of `Song` instances by title, artist, or duration.
 //!
 //! Additional Notes:
-//! - Song metadata includes album art decoding via `image` crate.
+//! - Song metadata includes album art stored as raw bytes (decoded only when displayed).
 //! - The system gracefully handles cases where metadata or song files are missing or incomplete.
 
 use crate::song::Song;

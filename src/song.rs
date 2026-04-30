@@ -1,12 +1,12 @@
 //! Song Struct and Playback Implementation for TUI Music App
 //!
 //! This module defines the `Song` struct which represents a music track in the application.
-//! Each song holds metadata such as title, artist, album, cover image, duration, file path,
+//! Each song holds metadata such as title, artist, album, cover image data, duration, file path,
 //! and a playback status flag.
 //!
 //! Key Features:
 //! - Each `Song` instance is uniquely identified using a UUID (based on its file path).
-//! - Optional support for cover art using the `image` crate's `DynamicImage`.
+//! - Optional support for cover art (stored as raw bytes, decoded on demand via load_cover()).
 //! - Includes a method `play` to stream and play the song using `rodio` audio playback.
 //!
 //! Dependencies include:

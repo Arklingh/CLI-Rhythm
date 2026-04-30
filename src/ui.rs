@@ -1,9 +1,12 @@
-//! Popup Rendering Utilities for TUI Music App
+//! UI Rendering Module for TUI Music App
 //!
-//! This module provides functions to render interactive popup components
+//! This module provides the main UI rendering functionality and popup components
 //! using the `ratatui` library for terminal user interfaces.
 //!
 //! Included Functions:
+//! - `render`: Renders the complete application interface including song list,
+//!   playlists, currently playing song info, progress bar, and volume control.
+//!
 //! - `draw_popup`: Renders a centered help popup showing all keybindings
 //!   and controls for navigating and managing music and playlists.
 //!
@@ -11,12 +14,12 @@
 //!   allowing users to enter a new playlist name.
 //!
 //! Rendering Details:
-//! - Uses `Paragraph`, `Block`, `Borders`, and `Alignment` from `ratatui::widgets`.
-//! - Popup dimensions are dynamically calculated based on terminal size.
-//! - Styled using `ratatui::style::{Color, Style}` for consistent appearance.
+//! - Uses `Paragraph`, `Block`, `Borders`, `List`, `Gauge`, and `Alignment` from `ratatui::widgets`.
+//! - Displays album artwork using `ratatui_image` for the currently playing song.
+//! - Implements responsive layout with `Layout` constraints for different terminal sizes.
+//! - Handles poisoned mutex locks gracefully when accessing audio sink state.
 //!
-//! These popups improve UX by giving users clear, accessible modal interfaces
-//! for help and input without leaving the TUI context.
+//! These components provide a cohesive TUI experience with popups for help and input.
 
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -74,6 +77,16 @@ const KEY_BINDINGS: &[KeyBinding] = &[
     KeyBinding::new("Esc or F1", "Close Popup"),
 ];
 
+/// Renders a centered popup area with optional title.
+///
+/// # Arguments
+/// * `f` - The frame to render on
+/// * `title` - Optional title for the popup block
+/// * `width` - Width of the popup in characters
+/// * `height` - Height of the popup in lines
+///
+/// # Returns
+/// The inner rectangle area for content rendering
 fn render_centered_popup(f: &mut Frame, title: Option<&str>, width: u16, height: u16) -> Rect {
     let size = f.area();
     let popup_area = Rect::new(
@@ -96,6 +109,13 @@ fn render_centered_popup(f: &mut Frame, title: Option<&str>, width: u16, height:
     block.inner(popup_area)
 }
 
+/// Renders the help popup showing all keyboard controls.
+///
+/// Displays a scrollable list of keybindings centered on screen.
+/// Press F1 or Esc to close the popup.
+///
+/// # Arguments
+/// * `f` - The frame to render on
 pub fn draw_popup(f: &mut Frame) {
     let size = f.area();
     let popup_width = size.width / 3;
@@ -115,6 +135,14 @@ pub fn draw_popup(f: &mut Frame) {
 
 }
 
+/// Renders the playlist name input popup.
+///
+/// Displays a centered input box for entering a new playlist name.
+/// Use Enter to confirm, Esc to cancel.
+///
+/// # Arguments
+/// * `f` - The frame to render on
+/// * `input` - The current input text to display
 pub fn draw_playlist_name_input_popup(f: &mut Frame, input: &str) {
     let size = f.area();
     let popup_width = size.width / 4;
@@ -132,6 +160,26 @@ pub fn draw_playlist_name_input_popup(f: &mut Frame, input: &str) {
 
 }
 
+/// Renders the complete application UI.
+///
+/// This is the main rendering function that draws all UI components:
+/// - Search bar with current criteria indicator
+/// - Playlist sidebar with selection highlighting
+/// - Song list with titles and selection state
+/// - Currently playing song info with album art
+/// - Progress bar showing playback position
+/// - Volume indicator
+///
+/// # Arguments
+/// * `f` - The frame to render on
+/// * `app` - Application state reference
+/// * `sink` - Audio sink for playback state (volume, is_paused)
+/// * `picker` - Image picker for rendering album artwork
+/// * `playlist_scroll_state` - State for playlist list widget
+/// * `song_scroll_state` - State for song list widget
+///
+/// # Note
+/// Handles poisoned mutex locks gracefully when accessing the audio sink.
 pub fn render(
     f: &mut Frame,
     app: &mut MyApp,

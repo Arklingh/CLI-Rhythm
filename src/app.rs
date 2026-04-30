@@ -56,12 +56,20 @@ pub struct MyApp {
 }
 
 impl MyApp {
-    // Initialize a new MyApp instance with default values
+    /// Creates a new `MyApp` instance with default values.
+    ///
+    /// # Returns
+    /// A new `MyApp` instance with empty song lists and default settings.
     pub fn new() -> MyApp {
         Self::default()
     }
 
-    // Function to load songs into the app
+    /// Loads songs from the music directory into the application.
+    ///
+    /// Scans the user's music folder (or current directory as fallback) for
+    /// supported audio files (MP3, WAV, FLAC, AAC) and populates the song
+    /// database with metadata including title, artist, album, duration, and
+    /// cover art (stored as raw bytes for memory efficiency).
     pub fn load_songs(&mut self) {
         let loaded_songs = scan_folder_for_music();
         self.songs_by_id = loaded_songs
@@ -75,13 +83,23 @@ impl MyApp {
         sort_songs(&mut self.songs, &self.sort_criteria); // Sort the `songs` vector
     }
 
-    // Function to handle song selection
-
+    /// Retrieves a mutable reference to a song by its UUID.
+    ///
+    /// Uses the internal `songs_by_id` map for O(log n) lookup efficiency.
+    ///
+    /// # Arguments
+    /// * `id` - The UUID of the song to find
+    ///
+    /// # Returns
+    /// `Some(&mut Song)` if found, `None` otherwise
     pub fn find_song_by_id(&mut self, id: Uuid) -> Option<&mut Song> {
         self.songs_by_id.get_mut(&id)
     }
 
-    // Function to stop the current song
+    /// Stops the currently playing song and updates its state.
+    ///
+    /// Sets `is_playing` to false for the currently playing song and
+    /// clears the `currently_playing_song` field.
     pub fn stop_song(&mut self) {
         if let Some(song_id) = self.currently_playing_song {
             if let Some(song) = self.songs_by_id.get_mut(&song_id) {
@@ -91,13 +109,22 @@ impl MyApp {
         }
     }
 
-    // Function to change sorting criteria
+    /// Changes the song sorting criteria and re-sorts the song list.
+    ///
+    /// # Arguments
+    /// * `criteria` - The new sorting criteria (Title, Artist, Duration, or Shuffle)
     pub fn set_sort_criteria(&mut self, criteria: SortCriteria) {
         self.sort_criteria = criteria;
         sort_songs(&mut self.songs, &self.sort_criteria); // Re-sort the songs based on new criteria
     }
 
-    // Update filtered songs with caching for performance
+    /// Updates the filtered song list based on current search and playlist selection.
+    ///
+    /// Applies the following filters in order:
+    /// 1. Selected playlist (if any playlist is selected)
+    /// 2. Search text matching the current criteria (Title, Artist, or Album)
+    ///
+    /// The filtered results are stored in `filtered_songs` for display.
     pub fn update_filtered_songs(&mut self) {
         let playlist_song_ids: HashSet<Uuid> = self
             .playlists
@@ -198,6 +225,17 @@ impl MyApp {
         Ok(())
     }
 
+    /// Processes audio playback state on each application tick.
+    ///
+    /// Checks if the current song has finished playing and auto-advances
+    /// to the next song in the filtered list if repeat is not enabled.
+    /// Handles song transitions safely with error handling.
+    ///
+    /// # Arguments
+    /// * `sink` - The audio sink for checking playback position and controlling playback
+    ///
+    /// # Note
+    /// Handles poisoned mutex locks gracefully when accessing the audio sink.
     pub fn tick(&mut self, sink: &Arc<Mutex<Sink>>) {
         if let Some(current_song_id) = self.currently_playing_song {
             // Find the song using songs_by_id for efficiency
@@ -268,7 +306,20 @@ impl MyApp {
         }
     }
 
-    // Helper function to safely play a file, handling potential errors.
+    /// Safely plays an audio file with comprehensive error handling.
+    ///
+    /// Handles file opening, audio decoding, and playback setup. Logs
+    /// errors without panicking on failure (file not found, decode errors,
+    /// poisoned mutex locks, etc.).
+    ///
+    /// # Arguments
+    /// * `path` - Path to the audio file to play
+    /// * `sink` - The audio sink to append the decoded source to
+    ///
+    /// # Note
+    /// - Resets `paused_time` when starting playback
+    /// - Sets `song_time` to zero (start of track)
+    /// - Handles poisoned mutex locks by recovering with `into_inner()`
     fn play_file_safely(&mut self, path: &Path, sink: &Arc<Mutex<Sink>>) {
         let file = match File::open(path) {
             Ok(f) => f,
@@ -307,6 +358,14 @@ impl MyApp {
 }
 
 impl Default for MyApp {
+    /// Creates a default `MyApp` instance with empty collections and default settings.
+    ///
+    /// # Default Values
+    /// - Empty song collections (`songs`, `songs_by_id`, `filtered_songs`)
+    /// - Search by Title, Sort by Title
+    /// - Hidden popups, no selected song/playlist
+    /// - Volume memory at 1.0 (100%)
+    /// - Repeat disabled
     fn default() -> Self {
         Self {
             songs: Vec::new(),

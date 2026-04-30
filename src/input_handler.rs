@@ -27,6 +27,28 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// Processes keyboard input and updates application state accordingly.
+///
+/// Handles all user interactions including:
+/// - Navigation (Up/Down arrows for songs, Ctrl+K/J for playlists)
+/// - Playback control (Ctrl+Space play/stop, Ctrl+P pause, Ctrl+H/L prev/next)
+/// - Seeking (Left/Right arrows for -5/+5 seconds)
+/// - Volume control (Ctrl+Left/Right arrows, Ctrl+M mute)
+/// - Search and filtering (Ctrl+S change criteria, typing for search)
+/// - Playlist management (Ctrl+C create, Ctrl+A add song, Ctrl+X delete)
+/// - UI toggles (F1 help, Esc close popup)
+///
+/// # Arguments
+/// * `key` - The keyboard event to process
+/// * `myapp` - Mutable reference to application state
+/// * `sink` - Audio sink for playback control
+/// * `exit_flag` - Set to true when user requests to quit (Ctrl+Q)
+/// * `playlist_scroll_state` - State for playlist list widget navigation
+/// * `song_scroll_state` - State for song list widget navigation
+///
+/// # Note
+/// Ignores key release events (only processes KeyEventKind::Press).
+/// Handles poisoned mutex locks gracefully when accessing the audio sink.
 pub fn handle_key_event(
     key: KeyEvent,
     myapp: &mut MyApp,
