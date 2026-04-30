@@ -246,10 +246,21 @@ impl MyApp {
 
             let current_time = self.song_time.unwrap_or_default().as_secs_f64();
 
-            // Check if song is finished
-            if song_clone.is_playing
-                && (song_clone.duration - current_time < 0.1 || song_clone.duration < current_time)
-            {
+            // Check if sink is empty (song finished) or position exceeded duration
+            let is_sink_empty = match sink.lock() {
+                Ok(guard) => guard.empty(),
+                Err(poisoned) => {
+                    eprintln!("Warning: Audio sink lock was poisoned, recovering...");
+                    poisoned.into_inner().empty()
+                }
+            };
+
+            let song_finished = is_sink_empty
+                || (song_clone.is_playing
+                    && song_clone.duration > 0.0
+                    && (song_clone.duration - current_time < 0.1 || current_time >= song_clone.duration));
+
+            if song_finished {
                 if self.repeat_song {
                     // If repeat is on, replay the current song
                     self.play_file_safely(&song_clone.path, sink);
