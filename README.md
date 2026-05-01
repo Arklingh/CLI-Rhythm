@@ -19,6 +19,12 @@ cli-rhythm is a simple, functional, and lightweight Command-Line Interface (CLI)
 ## Installing precompiled binary(Windows only)
 Preompiled binary is availiable in [Releases](https://github.com/Arklingh/CLI-Rhythm/releases).
 
+## Cargo install
+
+```bash
+cargo install CLI-Rhythm
+```
+
 ## Building from source
 1. Ensure you have Rust installed.
 2. Clone the repository:
