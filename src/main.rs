@@ -31,11 +31,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ui::render;
 use utils::sort_songs;
+use input_handler::handle_mouse_event;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
     enable_raw_mode()?;
     execute!(stdout(), EnterAlternateScreen)?;
+    execute!(stdout(), crossterm::event::EnableMouseCapture)?;
     let mut terminal = ratatui::init();
     let picker = Picker::from_fontsize((7, 14));
     let mut exit_code = false;
@@ -140,6 +142,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                 }
+                Event::Mouse(mouse) => {
+                    handle_mouse_event(
+                        mouse,
+                        &mut myapp,
+                        &sink,
+                        &mut playlist_scroll_state,
+                        &mut song_scroll_state,
+                    );
+                }
                 _ => {}
             }
 
@@ -155,6 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Cleanup
+    execute!(stdout(), crossterm::event::DisableMouseCapture)?;
     disable_raw_mode()?;
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
     Ok(())

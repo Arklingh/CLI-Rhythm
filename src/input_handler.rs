@@ -363,3 +363,158 @@ pub fn handle_key_event(
         _ => {}
     }
 }
+
+
+/// Handles mouse events for the TUI application.
+///
+/// Maps mouse interactions to UI actions:
+/// - Click on song list: select and play song
+/// - Click on playlist: select playlist
+/// - Click on progress bar: seek to position
+/// - Click on volume bar: adjust volume
+/// - Scroll wheel: scroll lists
+fn handle_mouse_event(
+    mouse: crossterm::event::MouseEvent,
+    myapp: &mut MyApp,
+    sink: &Arc<Mutex<Sink>>,
+    playlist_scroll_state: &mut ListState,
+    song_scroll_state: &mut ListState,
+) {
+    use crossterm::event::{MouseEventKind, MouseButton};
+
+    let area = match myapp.last_frame_area {
+        Some(a) => a,
+        None => return, // No frame rendered yet
+    };
+    let margin = 1u16;
+    let x = mouse.column;
+    let y = mouse.row;
+
+    // Calculate layout regions (must match render() layout)
+    let content_area = ratatui::layout::Rect::new(
+        area.x + margin,
+        area.y + margin,
+        area.width.saturating_sub(margin * 2),
+        area.height.saturating_sub(margin * 2),
+    );
+
+    // Song tab layout: [7%, 86%, 7%]
+    let top_height = (content_area.height as f32 * 0.07) as u16;
+    let main_height = (content_area.height as f32 * 0.86) as u16;
+    let footer_y = content_area.y + top_height + main_height;
+
+    // Main horizontal chunks: [20%, 60%, 20%]
+    let playlist_width = (content_area.width as f32 * 0.20) as u16;
+    let song_list_width = (content_area.width as f32 * 0.60) as u16;
+    let playlist_x = content_area.x;
+    let song_list_x = playlist_x + playlist_width;
+    let right_panel_x = song_list_x + song_list_width;
+
+    match mouse.kind {
+        MouseEventKind::Down(MouseButton::Left) => {
+            // Check if click is in song list area
+            if x >= song_list_x && x < right_panel_x
+                && y >= content_area.y + top_height
+                && y < footer_y
+            {
+                let song_area_y_start = content_area.y + top_height;
+                let relative_y = y.saturating_sub(song_area_y_start).saturating_sub(1); // -1 for border
+                let visible_index = relative_y as usize;
+
+                let list_offset = song_scroll_state.offset();
+                let actual_index = visible_index + list_offset;
+                if let Some(song) = myapp.filtered_songs.get(actual_index) {
+                    song_scroll_state.select(Some(actual_index));
+                    myapp.selected_song_id = Some(song.id);
+
+                    // Double-click or click on already selected plays the song
+                    if myapp.currently_playing_song != Some(song.id) {
+                        if let Some(mut_song) = myapp.songs.iter_mut().find(|s| s.id == song.id) {
+                            let _ = mut_song.play(sink);
+                            myapp.song_time = Some(Duration::default());
+                            myapp.currently_playing_song = Some(song.id);
+                            mut_song.is_playing = true;
+                        }
+                    }
+                }
+            }
+
+            // Check if click is in playlist area
+            if x >= playlist_x && x < song_list_x
+                && y >= content_area.y + top_height
+                && y < footer_y
+            {
+                let playlist_area_y_start = content_area.y + top_height;
+                let relative_y = y.saturating_sub(playlist_area_y_start).saturating_sub(1);
+                let visible_index = relative_y as usize;
+                let playlist_count = myapp.playlists.len();
+
+                if visible_index < playlist_count {
+                    playlist_scroll_state.select(Some(visible_index));
+                    myapp.selected_playlist_index = visible_index;
+                }
+            }
+
+            // Check if click is on progress bar (footer left 80%)
+            let footer_height = content_area.height - top_height - main_height;
+            if y >= footer_y && y < footer_y + footer_height
+                && x >= content_area.x
+                && x < content_area.x + (content_area.width as f32 * 0.80) as u16
+            {
+                // Seek to clicked position
+                if let Some(song_id) = myapp.currently_playing_song.or(myapp.selected_song_id) {
+                    if let Some(song) = myapp.find_song_by_id(song_id) {
+                        if song.duration > 0.0 {
+                            let progress_width = (content_area.width as f32 * 0.80) as u16;
+                            let relative_x = x.saturating_sub(content_area.x).saturating_sub(1) as f64;
+                            let seek_ratio = relative_x / progress_width as f64;
+                            let seek_secs = (seek_ratio * song.duration).max(0.0);
+
+                            // Update song_time to seek position
+                            myapp.song_time = Some(Duration::from_secs_f64(seek_secs));
+
+                            // Try to seek in sink
+                            if let Ok(sink_guard) = sink.lock() {
+                                let _ = sink_guard.try_seek(Duration::from_secs_f64(seek_secs));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if click is on volume bar (footer right 20%)
+            let volume_bar_x = content_area.x + (content_area.width as f32 * 0.80) as u16;
+            if y >= footer_y && y < footer_y + footer_height
+                && x >= volume_bar_x
+                && x < content_area.x + content_area.width
+            {
+                // Adjust volume based on click position
+                let volume_width = content_area.width - (content_area.width as f32 * 0.80) as u16;
+                let relative_x = x.saturating_sub(volume_bar_x).saturating_sub(1) as f32;
+                let new_volume = (relative_x / volume_width as f32).clamp(0.0, 1.0);
+
+                if let Ok(sink_guard) = sink.lock() {
+                    sink_guard.set_volume(new_volume);
+                }
+            }
+        }
+        MouseEventKind::ScrollDown => {
+            // Scroll song list down
+            if let Some(current) = song_scroll_state.selected() {
+                let new_index = (current + 3).min(myapp.filtered_songs.len().saturating_sub(1));
+                song_scroll_state.select(Some(new_index));
+            } else if !myapp.filtered_songs.is_empty() {
+                song_scroll_state.select(Some(0));
+            }
+        }
+        MouseEventKind::ScrollUp => {
+            // Scroll song list up
+            if let Some(current) = song_scroll_state.selected() {
+                let new_index = current.saturating_sub(3);
+                song_scroll_state.select(Some(new_index));
+            }
+        }
+        _ => {}
+    }
+}
+

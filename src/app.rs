@@ -20,6 +20,8 @@ use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
 use rodio::Sink;
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
@@ -53,6 +55,7 @@ pub struct MyApp {
     pub chosen_song_ids: Vec<Uuid>,
     pub song_time: Option<Duration>,
     pub repeat_song: bool,
+    pub last_frame_area: Option<ratatui::layout::Rect>, // Store frame area for mouse hit testing
 }
 
 impl MyApp {
@@ -122,8 +125,9 @@ impl MyApp {
     ///
     /// Applies the following filters in order:
     /// 1. Selected playlist (if any playlist is selected)
-    /// 2. Search text matching the current criteria (Title, Artist, or Album)
+    /// 2. Fuzzy search matching the current criteria (Title, Artist, or Album)
     ///
+    /// Uses nucleo for fuzzy matching - "bjrk" will match "Björk", etc.
     /// The filtered results are stored in `filtered_songs` for display.
     pub fn update_filtered_songs(&mut self) {
         let playlist_song_ids: HashSet<Uuid> = self
@@ -135,19 +139,41 @@ impl MyApp {
             .into_iter()
             .collect();
 
-        let search_text_lower = self.search_text.to_lowercase();
+        // If no search text, just filter by playlist
+        if self.search_text.is_empty() {
+            self.filtered_songs = self
+                .songs
+                .iter()
+                .filter(|song| playlist_song_ids.contains(&song.id))
+                .cloned()
+                .collect();
+            return;
+        }
 
-        self.filtered_songs = self
+        // Create fuzzy matcher
+        let matcher = SkimMatcherV2::default();
+
+        // Score and filter songs using fuzzy matching
+        let mut scored_songs: Vec<(i64, &Song)> = self
             .songs
             .iter()
-            .filter(|s| match self.search_criteria {
-                SearchCriteria::Title => s.title.to_lowercase().contains(&search_text_lower),
-                SearchCriteria::Artist => s.artist.to_lowercase().contains(&search_text_lower),
-                SearchCriteria::Album => s.album.to_lowercase().contains(&search_text_lower),
-            })
             .filter(|song| playlist_song_ids.contains(&song.id))
-            .cloned()
+            .filter_map(|song| {
+                let haystack = match self.search_criteria {
+                    SearchCriteria::Title => &song.title,
+                    SearchCriteria::Artist => &song.artist,
+                    SearchCriteria::Album => &song.album,
+                };
+                // Get match score - higher is better
+                matcher.fuzzy_match(haystack, &self.search_text)
+                    .map(|score| (score, song))
+            })
             .collect();
+
+        // Sort by score (descending) - best matches first
+        scored_songs.sort_by(|a, b| b.0.cmp(&a.0));
+
+        self.filtered_songs = scored_songs.into_iter().map(|(_, song)| song.clone()).collect();
     }
 
     /// Saves the current playlists to a file.
@@ -398,6 +424,7 @@ impl Default for MyApp {
             chosen_song_ids: vec![],
             song_time: None,
             repeat_song: false,
+            last_frame_area: None,
         }
     }
 }

@@ -55,6 +55,10 @@ impl KeyBinding {
 // List of all application keybindings
 const KEY_BINDINGS: &[KeyBinding] = &[
     KeyBinding::new("Up/Down Arrow Keys", "Navigate songs"),
+    KeyBinding::new("Mouse Click", "Select song/playlist"),
+    KeyBinding::new("Mouse Scroll", "Scroll song list"),
+    KeyBinding::new("Progress Bar Click", "Seek to position"),
+    KeyBinding::new("Volume Bar Click", "Adjust volume"),
     KeyBinding::new("Ctrl + Spacebar", "Play/Stop"),
     KeyBinding::new("Ctrl + P", "Pause/Unpause"),
     KeyBinding::new("Ctrl + M", "Mute/Unmute"),
@@ -188,6 +192,9 @@ pub fn render(
     playlist_scroll_state: &mut ratatui::widgets::ListState,
     song_scroll_state: &mut ratatui::widgets::ListState,
 ) {
+    // Store frame area for mouse hit testing
+    app.last_frame_area = Some(f.area());
+
     // Get sink state (volume, is_paused) - handle poisoned lock
     let (volume, is_paused) = match sink.lock() {
         Ok(guard) => (guard.volume(), guard.is_paused()),
