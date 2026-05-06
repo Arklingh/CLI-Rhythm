@@ -20,8 +20,8 @@ use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
 use dirs;
-use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 use rodio::Sink;
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
@@ -165,7 +165,8 @@ impl MyApp {
                     SearchCriteria::Album => &song.album,
                 };
                 // Get match score - higher is better
-                matcher.fuzzy_match(haystack, &self.search_text)
+                matcher
+                    .fuzzy_match(haystack, &self.search_text)
                     .map(|score| (score, song))
             })
             .collect();
@@ -173,7 +174,10 @@ impl MyApp {
         // Sort by score (descending) - best matches first
         scored_songs.sort_by(|a, b| b.0.cmp(&a.0));
 
-        self.filtered_songs = scored_songs.into_iter().map(|(_, song)| song.clone()).collect();
+        self.filtered_songs = scored_songs
+            .into_iter()
+            .map(|(_, song)| song.clone())
+            .collect();
     }
 
     /// Saves the current playlists to a file.
@@ -284,7 +288,8 @@ impl MyApp {
             let song_finished = is_sink_empty
                 || (song_clone.is_playing
                     && song_clone.duration > 0.0
-                    && (song_clone.duration - current_time < 0.1 || current_time >= song_clone.duration));
+                    && (song_clone.duration - current_time < 0.1
+                        || current_time >= song_clone.duration));
 
             if song_finished {
                 if self.repeat_song {
@@ -361,20 +366,28 @@ impl MyApp {
         let file = match File::open(path) {
             Ok(f) => f,
             Err(e) => {
-                eprintln!("Error: Could not open audio file: {} - {}", path.display(), e);
+                eprintln!(
+                    "Error: Could not open audio file: {} - {}",
+                    path.display(),
+                    e
+                );
                 return;
             }
         };
-        
+
         let reader = BufReader::new(file);
         let source = match rodio::Decoder::new(reader) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("Error: Could not decode audio file: {} - {}", path.display(), e);
+                eprintln!(
+                    "Error: Could not decode audio file: {} - {}",
+                    path.display(),
+                    e
+                );
                 return;
             }
         };
-        
+
         let sink_guard = match sink.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
@@ -382,7 +395,7 @@ impl MyApp {
                 poisoned.into_inner()
             }
         };
-        
+
         self.paused_time = None; // Reset pause time when starting a new file
         sink_guard.clear(); // Stop current playback
         sink_guard.append(source);

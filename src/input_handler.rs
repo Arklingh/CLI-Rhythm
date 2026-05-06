@@ -364,7 +364,6 @@ pub fn handle_key_event(
     }
 }
 
-
 /// Handles mouse events for the TUI application.
 ///
 /// Maps mouse interactions to UI actions:
@@ -373,14 +372,14 @@ pub fn handle_key_event(
 /// - Click on progress bar: seek to position
 /// - Click on volume bar: adjust volume
 /// - Scroll wheel: scroll lists
-fn handle_mouse_event(
+pub fn handle_mouse_event(
     mouse: crossterm::event::MouseEvent,
     myapp: &mut MyApp,
     sink: &Arc<Mutex<Sink>>,
     playlist_scroll_state: &mut ListState,
     song_scroll_state: &mut ListState,
 ) {
-    use crossterm::event::{MouseEventKind, MouseButton};
+    use crossterm::event::{MouseButton, MouseEventKind};
 
     let area = match myapp.last_frame_area {
         Some(a) => a,
@@ -413,7 +412,8 @@ fn handle_mouse_event(
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             // Check if click is in song list area
-            if x >= song_list_x && x < right_panel_x
+            if x >= song_list_x
+                && x < right_panel_x
                 && y >= content_area.y + top_height
                 && y < footer_y
             {
@@ -440,7 +440,8 @@ fn handle_mouse_event(
             }
 
             // Check if click is in playlist area
-            if x >= playlist_x && x < song_list_x
+            if x >= playlist_x
+                && x < song_list_x
                 && y >= content_area.y + top_height
                 && y < footer_y
             {
@@ -457,7 +458,8 @@ fn handle_mouse_event(
 
             // Check if click is on progress bar (footer left 80%)
             let footer_height = content_area.height - top_height - main_height;
-            if y >= footer_y && y < footer_y + footer_height
+            if y >= footer_y
+                && y < footer_y + footer_height
                 && x >= content_area.x
                 && x < content_area.x + (content_area.width as f32 * 0.80) as u16
             {
@@ -466,7 +468,8 @@ fn handle_mouse_event(
                     if let Some(song) = myapp.find_song_by_id(song_id) {
                         if song.duration > 0.0 {
                             let progress_width = (content_area.width as f32 * 0.80) as u16;
-                            let relative_x = x.saturating_sub(content_area.x).saturating_sub(1) as f64;
+                            let relative_x =
+                                x.saturating_sub(content_area.x).saturating_sub(1) as f64;
                             let seek_ratio = relative_x / progress_width as f64;
                             let seek_secs = (seek_ratio * song.duration).max(0.0);
 
@@ -484,7 +487,8 @@ fn handle_mouse_event(
 
             // Check if click is on volume bar (footer right 20%)
             let volume_bar_x = content_area.x + (content_area.width as f32 * 0.80) as u16;
-            if y >= footer_y && y < footer_y + footer_height
+            if y >= footer_y
+                && y < footer_y + footer_height
                 && x >= volume_bar_x
                 && x < content_area.x + content_area.width
             {
@@ -517,4 +521,3 @@ fn handle_mouse_event(
         _ => {}
     }
 }
-

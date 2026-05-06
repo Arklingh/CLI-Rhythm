@@ -23,7 +23,7 @@
 
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Text;
+use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 use ratatui_image::picker::Picker;
@@ -400,10 +400,12 @@ pub fn render(
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(format!(
-                    "Songs-------------------------------------------------------------------Sort by: {}",
-                    app.sort_criteria.to_string(),
-                )),
+                .title("Songs")
+                .title_alignment(Alignment::Left)
+                .title(
+                    Line::from(format!("Sort: {}", app.sort_criteria.to_string()))
+                        .alignment(Alignment::Right),
+                ),
         )
         .highlight_style(
             Style::default()
