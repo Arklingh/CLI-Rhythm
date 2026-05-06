@@ -23,6 +23,7 @@ use app::MyApp;
 use crossterm::event::{poll, Event};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen};
 use crossterm::{execute, ExecutableCommand};
+use input_handler::handle_mouse_event;
 use ratatui::widgets::ListState;
 use ratatui_image::picker::Picker;
 use rodio::{OutputStream, Sink};
@@ -31,7 +32,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ui::render;
 use utils::sort_songs;
-use input_handler::handle_mouse_event;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize terminal
@@ -119,7 +119,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Render UI
         terminal.draw(|f| {
-            render(f, &mut myapp, &sink, &picker, &mut playlist_scroll_state, &mut song_scroll_state);
+            render(
+                f,
+                &mut myapp,
+                &sink,
+                &picker,
+                &mut playlist_scroll_state,
+                &mut song_scroll_state,
+            );
         })?;
 
         // Handle input events
