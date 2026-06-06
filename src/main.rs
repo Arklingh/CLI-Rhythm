@@ -26,7 +26,7 @@ use crossterm::{execute, ExecutableCommand};
 use input_handler::handle_mouse_event;
 use ratatui::widgets::ListState;
 use ratatui_image::picker::Picker;
-use rodio::{OutputStream, Sink};
+use rodio::{DeviceSinkBuilder, Player};
 use std::io::stdout;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -64,14 +64,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sort_songs(&mut myapp.songs, &myapp.sort_criteria);
 
-    let (_stream, stream_handle) = OutputStream::try_default().map_err(|e| {
+    let mut stream_handle = DeviceSinkBuilder::open_default_sink().map_err(|e| {
         eprintln!("Error: Could not initialize audio output: {}", e);
         e
     })?;
-    let sink = Arc::new(Mutex::new(Sink::try_new(&stream_handle).map_err(|e| {
-        eprintln!("Error: Could not create audio sink: {}", e);
-        e
-    })?));
+    stream_handle.log_on_drop(false);
+    let sink = Arc::new(Mutex::new(Player::connect_new(&stream_handle.mixer())));
 
     // Initial filtered songs update
     myapp.update_filtered_songs();

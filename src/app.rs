@@ -22,7 +22,7 @@ use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriter
 use dirs;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use rodio::Sink;
+use rodio::Player;
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
@@ -266,7 +266,7 @@ impl MyApp {
     ///
     /// # Note
     /// Handles poisoned mutex locks gracefully when accessing the audio sink.
-    pub fn tick(&mut self, sink: &Arc<Mutex<Sink>>) {
+    pub fn tick(&mut self, sink: &Arc<Mutex<Player>>) {
         if let Some(current_song_id) = self.currently_playing_song {
             // Find the song using songs_by_id for efficiency
             let song_clone = match self.songs_by_id.get(&current_song_id).cloned() {
@@ -362,7 +362,7 @@ impl MyApp {
     /// - Resets `paused_time` when starting playback
     /// - Sets `song_time` to zero (start of track)
     /// - Handles poisoned mutex locks by recovering with `into_inner()`
-    fn play_file_safely(&mut self, path: &Path, sink: &Arc<Mutex<Sink>>) {
+    fn play_file_safely(&mut self, path: &Path, sink: &Arc<Mutex<Player>>) {
         let file = match File::open(path) {
             Ok(f) => f,
             Err(e) => {

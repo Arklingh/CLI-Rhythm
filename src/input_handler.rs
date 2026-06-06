@@ -14,14 +14,14 @@
 //! - Switching between search criteria (title, artist, album)
 //! - Changing sort criteria
 //!
-//! The function modifies the `MyApp` application state, controls a shared `rodio::Sink`
+//! The function modifies the `MyApp` application state, controls a shared `rodio::Player`
 //! for audio playback, and tracks view-related parameters for rendering playlists/songs.
 
 use crate::app::MyApp;
 use crate::utils::SearchCriteria;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
-use rodio::Sink;
+use rodio::Player;
 use std::fs::{self};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -52,7 +52,7 @@ use std::time::Duration;
 pub fn handle_key_event(
     key: KeyEvent,
     myapp: &mut MyApp,
-    sink: &Arc<Mutex<Sink>>,
+    sink: &Arc<Mutex<Player>>,
     exit_flag: &mut bool,
     playlist_scroll_state: &mut ListState,
     song_scroll_state: &mut ListState,
@@ -98,6 +98,10 @@ pub fn handle_key_event(
             } else {
                 playlist_scroll_state.select_first();
             }
+
+            if let Some(new_index) = playlist_scroll_state.selected() {
+                myapp.selected_playlist_index = new_index;
+            }
         }
         (KeyCode::Char('k'), KeyModifiers::CONTROL) => {
             if let Some(curr_index) = playlist_scroll_state.selected() {
@@ -108,6 +112,10 @@ pub fn handle_key_event(
                 }
             } else {
                 playlist_scroll_state.select_first();
+            }
+
+            if let Some(new_index) = playlist_scroll_state.selected() {
+                myapp.selected_playlist_index = new_index;
             }
         }
         (KeyCode::Char(' '), KeyModifiers::CONTROL) => {
@@ -299,6 +307,9 @@ pub fn handle_key_event(
                 if let Ok(sink) = sink.lock() {
                     let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
                     let _ = sink.try_seek(new_position);
+                    // if let Err(e) = sink.try_seek(new_position) {
+                    //     eprintln!("Помилка перемотування FLAC: {:?}", e);
+                    // }
                     myapp.song_time = Some(new_position);
                 }
             }
@@ -375,7 +386,7 @@ pub fn handle_key_event(
 pub fn handle_mouse_event(
     mouse: crossterm::event::MouseEvent,
     myapp: &mut MyApp,
-    sink: &Arc<Mutex<Sink>>,
+    sink: &Arc<Mutex<Player>>,
     playlist_scroll_state: &mut ListState,
     song_scroll_state: &mut ListState,
 ) {

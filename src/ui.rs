@@ -28,7 +28,7 @@ use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
-use rodio::Sink;
+use rodio::Player;
 use std::ops::Sub;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -136,7 +136,6 @@ pub fn draw_popup(f: &mut Frame) {
         .wrap(Wrap { trim: true });
 
     f.render_widget(popup_text, inner_area);
-
 }
 
 /// Renders the playlist name input popup.
@@ -152,7 +151,8 @@ pub fn draw_playlist_name_input_popup(f: &mut Frame, input: &str) {
     let popup_width = size.width / 4;
     let popup_height = size.height / 8;
 
-    let inner_block_area = render_centered_popup(f, Some("Enter Playlist Name"), popup_width, popup_height);
+    let inner_block_area =
+        render_centered_popup(f, Some("Enter Playlist Name"), popup_width, popup_height);
 
     let input_text = Paragraph::new(input)
         .block(Block::default().borders(Borders::NONE))
@@ -161,7 +161,6 @@ pub fn draw_playlist_name_input_popup(f: &mut Frame, input: &str) {
         .wrap(Wrap { trim: true });
 
     f.render_widget(input_text, inner_block_area);
-
 }
 
 /// Renders the complete application UI.
@@ -187,7 +186,7 @@ pub fn draw_playlist_name_input_popup(f: &mut Frame, input: &str) {
 pub fn render(
     f: &mut Frame,
     app: &mut MyApp,
-    sink: &Arc<Mutex<Sink>>,
+    sink: &Arc<Mutex<Player>>,
     picker: &Picker,
     playlist_scroll_state: &mut ratatui::widgets::ListState,
     song_scroll_state: &mut ratatui::widgets::ListState,
@@ -222,18 +221,19 @@ pub fn render(
         .style(Style::default().fg(Color::White));
 
     // Selected song info
-    let selected_song_details = if let Some(song) = app.selected_song_id.and_then(|id| app.find_song_by_id(id)) {
-        format!(
-            "Artist: {}\nSong: {}\nAlbum: {}\nDuration: {:02}:{:02}",
-            song.artist,
-            song.title,
-            song.album,
-            (song.duration / 60.0).floor(),
-            (song.duration % 60.0).round()
-        )
-    } else {
-        "No song selected".to_string()
-    };
+    let selected_song_details =
+        if let Some(song) = app.selected_song_id.and_then(|id| app.find_song_by_id(id)) {
+            format!(
+                "Artist: {}\nSong: {}\nAlbum: {}\nDuration: {:02}:{:02}",
+                song.artist,
+                song.title,
+                song.album,
+                (song.duration / 60.0).floor(),
+                (song.duration % 60.0).round()
+            )
+        } else {
+            "No song selected".to_string()
+        };
 
     let selected_song_info = Paragraph::new(selected_song_details)
         .block(
@@ -267,12 +267,14 @@ pub fn render(
         .style(Style::default().fg(Color::White));
 
     // Playing song cover - loaded on demand to save memory
-    let playing_song_cover = app.currently_playing_song
+    let playing_song_cover = app
+        .currently_playing_song
         .and_then(|song_id| app.find_song_by_id(song_id))
         .and_then(|song| song.load_cover());
 
     // Determine song for progress bar
-    let song_id = app.currently_playing_song
+    let song_id = app
+        .currently_playing_song
         .or(app.selected_song_id)
         .unwrap_or_else(|| app.songs.first().map(|song| song.id).unwrap_or_default());
 
@@ -440,9 +442,10 @@ pub fn render(
     f.render_widget(selected_song_info, songs_info[0]);
 
     // Currently playing song block
-    let playing_song_block = Block::default()
-        .borders(Borders::ALL)
-        .title(format!("Current song----Repeat:{}", if app.repeat_song { "✅" } else { "❌" }));
+    let playing_song_block = Block::default().borders(Borders::ALL).title(format!(
+        "Current song----Repeat:{}",
+        if app.repeat_song { "✅" } else { "❌" }
+    ));
 
     let inner_layout = Layout::default()
         .direction(Direction::Vertical)

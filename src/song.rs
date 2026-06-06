@@ -13,10 +13,10 @@
 //! - `rodio` for audio decoding and playback.
 //! - `uuid` for unique song identification.
 //! - `image` for optional album cover handling.
-//! - `Arc<Mutex<Sink>>` for shared and safe control of audio playback across threads.
+//! - `Arc<Mutex<Player>>` for shared and safe control of audio playback across threads.
 
 use image::{DynamicImage, ImageFormat};
-use rodio::Sink;
+use rodio::Player;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -48,7 +48,9 @@ impl Song {
             Some("image/tiff") => ImageFormat::Tiff,
             _ => ImageFormat::Jpeg, // Default
         };
-        image::load_from_memory_with_format(data, format).ok().map(Arc::new)
+        image::load_from_memory_with_format(data, format)
+            .ok()
+            .map(Arc::new)
     }
 
     pub fn new(
@@ -77,7 +79,7 @@ impl Song {
         })
     }
 
-    pub fn play(&self, sink: &Arc<Mutex<Sink>>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn play(&self, sink: &Arc<Mutex<Player>>) -> Result<(), Box<dyn std::error::Error>> {
         let file = fs::File::open(&self.path)?;
         let source = rodio::Decoder::new(io::BufReader::new(file))?;
         {
