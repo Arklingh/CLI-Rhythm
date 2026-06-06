@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout(), EnterAlternateScreen)?;
     execute!(stdout(), crossterm::event::EnableMouseCapture)?;
     let mut terminal = ratatui::init();
-    let picker = Picker::from_fontsize((7, 14));
+    let picker = Picker::from_query_stdio()?;
     let mut exit_code = false;
 
     stdout().execute(Clear(crossterm::terminal::ClearType::All))?;
