@@ -29,9 +29,9 @@ use ratatui::Frame;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
 use rodio::Player;
+use std::fmt::Display;
 use std::ops::Sub;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::app::MyApp;
 use crate::utils::SearchCriteria;
@@ -46,9 +46,11 @@ impl KeyBinding {
     const fn new(keys: &'static str, description: &'static str) -> Self {
         KeyBinding { keys, description }
     }
+}
 
-    fn to_string(&self) -> String {
-        format!("{}: {}", self.keys, self.description)
+impl Display for KeyBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.keys, self.description)
     }
 }
 
@@ -212,7 +214,7 @@ pub fn render(
     };
 
     // Search bar widget
-    let search_bar = Paragraph::new(Text::raw(format!("{}", app.search_text)))
+    let search_bar = Paragraph::new(Text::raw(app.search_text.to_string()))
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -309,13 +311,13 @@ pub fn render(
     let song_progress = if let Some(song) = app.find_song_by_id(song_id).cloned() {
         let elapsed_time = if let Some(paused_time) = app.paused_time {
             app.song_time
-                .unwrap_or(Duration::default())
+                .unwrap_or_default()
                 .as_secs_f64()
                 .sub(paused_time.as_secs_f64())
                 .min(song.duration)
         } else {
             app.song_time
-                .unwrap_or(Duration::default())
+                .unwrap_or_default()
                 .as_secs_f64()
                 .min(song.duration)
         };
@@ -405,8 +407,7 @@ pub fn render(
                 .title("Songs")
                 .title_alignment(Alignment::Left)
                 .title(
-                    Line::from(format!("Sort: {}", app.sort_criteria.to_string()))
-                        .alignment(Alignment::Right),
+                    Line::from(format!("Sort: {}", app.sort_criteria)).alignment(Alignment::Right),
                 ),
         )
         .highlight_style(
@@ -418,8 +419,8 @@ pub fn render(
     // Playlist items
     let playlist_items: Vec<ListItem> = app
         .playlists
-        .iter()
-        .map(|(playlist_name, _songs)| ListItem::new(playlist_name.clone()))
+        .keys()
+        .map(|playlist_name| ListItem::new(playlist_name.clone()))
         .collect();
 
     let playlist_list = List::new(playlist_items)
@@ -471,11 +472,11 @@ pub fn render(
 
     // Popups
     if app.hint_popup_state.visible {
-        let _ = draw_popup(f);
+        draw_popup(f);
     }
 
     if app.playlist_input_popup.visible {
-        let _ = draw_playlist_name_input_popup(f, &app.playlist_name_input);
+        draw_playlist_name_input_popup(f, &app.playlist_name_input);
     }
 
     // Hint text at bottom right

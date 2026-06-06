@@ -19,7 +19,6 @@
 use crate::song::Song;
 use crate::utils::sort_songs;
 use crate::utils::{scan_folder_for_music, PopupState, SearchCriteria, SortCriteria};
-use dirs;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use rodio::Player;
@@ -217,7 +216,7 @@ impl MyApp {
         let mut loaded_playlists: BTreeMap<String, Vec<Uuid>> = BTreeMap::new();
 
         // Read all .m3u files
-        for entry in std::fs::read_dir(&directory_path)? {
+        for entry in std::fs::read_dir(directory_path)? {
             let entry = entry?;
             let path = entry.path();
 

@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         e
     })?;
     stream_handle.log_on_drop(false);
-    let sink = Arc::new(Mutex::new(Player::connect_new(&stream_handle.mixer())));
+    let sink = Arc::new(Mutex::new(Player::connect_new(stream_handle.mixer())));
 
     // Initial filtered songs update
     myapp.update_filtered_songs();

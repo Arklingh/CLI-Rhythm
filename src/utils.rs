@@ -22,7 +22,6 @@
 
 use crate::song::Song;
 use audiotags::Tag;
-use dirs;
 use mp3_metadata::read_from_file;
 use rand::{rng, seq::SliceRandom};
 use std::env;
@@ -96,16 +95,19 @@ fn parse_song_metadata(path: &Path) -> Option<Song> {
     let meta = Tag::new().read_from_path(path).ok()?;
 
     // Store raw cover bytes instead of decoded image (saves ~90% memory)
-    let (cover_data, cover_mime_type) = meta.album_cover().map(|cover| {
-        let mime = match cover.mime_type {
-            audiotags::MimeType::Jpeg => "image/jpeg",
-            audiotags::MimeType::Png => "image/png",
-            audiotags::MimeType::Gif => "image/gif",
-            audiotags::MimeType::Bmp => "image/bmp",
-            audiotags::MimeType::Tiff => "image/tiff",
-        };
-        (cover.data.to_vec(), mime.to_string())
-    }).unzip();
+    let (cover_data, cover_mime_type) = meta
+        .album_cover()
+        .map(|cover| {
+            let mime = match cover.mime_type {
+                audiotags::MimeType::Jpeg => "image/jpeg",
+                audiotags::MimeType::Png => "image/png",
+                audiotags::MimeType::Gif => "image/gif",
+                audiotags::MimeType::Bmp => "image/bmp",
+                audiotags::MimeType::Tiff => "image/tiff",
+            };
+            (cover.data.to_vec(), mime.to_string())
+        })
+        .unzip();
 
     // Unified length logic(read_from_file for mp3, standart for else)
     let duration = if ext == "mp3" {
@@ -126,7 +128,8 @@ fn parse_song_metadata(path: &Path) -> Option<Song> {
             .map(|a| a.title.to_string())
             .unwrap_or_else(|| "None".to_string()),
         duration,
-    ).ok()
+    )
+    .ok()
 }
 
 pub fn scan_folder_for_music() -> Vec<Song> {
@@ -174,7 +177,7 @@ pub fn scan_folder_for_music() -> Vec<Song> {
     song_list
 }
 
-pub fn sort_songs(songs: &mut Vec<Song>, criteria: &SortCriteria) {
+pub fn sort_songs(songs: &mut [Song], criteria: &SortCriteria) {
     match criteria {
         SortCriteria::Title => {
             songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));

@@ -135,7 +135,7 @@ pub fn handle_key_event(
                             || Some(selected_id) != myapp.currently_playing_song
                         {
                             // Play the song
-                            if let Err(e) = filtered_song.play(&sink) {
+                            if let Err(e) = filtered_song.play(sink) {
                                 eprintln!("Error playing song: {}", e);
                             }
                             myapp.song_time = Some(Duration::default());
@@ -202,7 +202,7 @@ pub fn handle_key_event(
                         if let Ok(sink_guard) = sink.lock() {
                             sink_guard.clear();
                         }
-                        if let Err(e) = previous_song.play(&sink) {
+                        if let Err(e) = previous_song.play(sink) {
                             eprintln!("Error playing previous song: {}", e);
                         }
                         myapp.currently_playing_song = Some(previous_song.id);
@@ -225,7 +225,7 @@ pub fn handle_key_event(
                         if let Ok(sink_guard) = sink.lock() {
                             sink_guard.clear();
                         }
-                        if let Err(e) = next_song.play(&sink) {
+                        if let Err(e) = next_song.play(sink) {
                             eprintln!("Error playing next song: {}", e);
                         }
                         myapp.selected_song_id = Some(next_song.id);
@@ -294,7 +294,7 @@ pub fn handle_key_event(
             myapp.set_sort_criteria(myapp.sort_criteria.next());
         }
         (KeyCode::Right, KeyModifiers::NONE) => {
-            if let Some(_) = myapp.currently_playing_song {
+            if myapp.currently_playing_song.is_some() {
                 if let Ok(sink) = sink.lock() {
                     let new_position = sink.get_pos() + Duration::from_secs(5);
                     let _ = sink.try_seek(new_position);
@@ -310,7 +310,7 @@ pub fn handle_key_event(
                 if let Ok(sink_lock) = sink.lock() {
                     let new_position = sink_lock.get_pos().saturating_sub(Duration::from_secs(5));
 
-                    if let Err(_) = sink_lock.try_seek(new_position) {
+                    if sink_lock.try_seek(new_position).is_err() {
                         sink_lock.clear();
 
                         // Unnecessary check?
