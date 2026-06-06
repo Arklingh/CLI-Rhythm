@@ -303,13 +303,29 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Left, KeyModifiers::NONE) => {
-            if let Some(_) = myapp.currently_playing_song {
-                if let Ok(sink) = sink.lock() {
-                    let new_position = sink.get_pos().saturating_sub(Duration::from_secs(5));
-                    let _ = sink.try_seek(new_position);
-                    // if let Err(e) = sink.try_seek(new_position) {
-                    //     eprintln!("Помилка перемотування FLAC: {:?}", e);
-                    // }
+            // (Hopefully) temp solution for flac backwards playback
+            // Starting a song again from 0 and skippung ahead ;-;
+
+            if let Some(song_id) = myapp.currently_playing_song {
+                if let Ok(sink_lock) = sink.lock() {
+                    let new_position = sink_lock.get_pos().saturating_sub(Duration::from_secs(5));
+
+                    if let Err(_) = sink_lock.try_seek(new_position) {
+                        sink_lock.clear();
+
+                        // Unnecessary check?
+                        if let Some(song) = myapp.find_song_by_id(song_id) {
+                            let file = std::fs::File::open(&song.path).unwrap();
+                            let source =
+                                rodio::Decoder::new(std::io::BufReader::new(file)).unwrap();
+
+                            sink_lock.append(source);
+                            sink_lock.play();
+
+                            let _ = sink_lock.try_seek(new_position);
+                        }
+                    }
+
                     myapp.song_time = Some(new_position);
                 }
             }
