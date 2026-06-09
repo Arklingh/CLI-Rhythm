@@ -2,7 +2,7 @@
 
 cli-rhythm is a simple, functional, and lightweight Command-Line Interface (CLI) music player. It is designed to provide a seamless music-playing experience directly from your terminal. Built with Rust, it supports intuitive navigation, and a minimal user interface for distraction-free listening.
 
-<img alt="зображення" src="https://github.com/user-attachments/assets/e6ef2dba-fc2f-451a-a273-ec5d9583424c" />
+<img width="2560" height="1440" alt="зображення" src="https://github.com/user-attachments/assets/83cdca37-8c8e-4894-87f0-f645f22134a1" />
 
 ## Features
 
