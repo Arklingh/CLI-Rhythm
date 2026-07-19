@@ -387,13 +387,10 @@ impl MyApp {
             }
         };
 
-        let sink_guard = match sink.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                eprintln!("Warning: Audio sink lock was poisoned, recovering...");
-                poisoned.into_inner()
-            }
-        };
+        let sink_guard = sink.lock().unwrap_or_else(|poisoned| {
+            eprintln!("Warning: Audio sink lock was poisoned, recovering...");
+            poisoned.into_inner()
+        });
 
         self.paused_time = None; // Reset pause time when starting a new file
         sink_guard.clear(); // Stop current playback

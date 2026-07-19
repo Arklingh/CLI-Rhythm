@@ -92,24 +92,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Validate and update selected song from scroll state
-        if let Some(index) = song_scroll_state.selected() {
+        if myapp.filtered_songs.is_empty() {
+            myapp.selected_song_id = None;
+        } else {
+            // Get the song at the current index, or default to the first song if out of bounds/missing
+            let index = song_scroll_state.selected().unwrap_or(0);
+
             if let Some(song) = myapp.filtered_songs.get(index) {
                 myapp.selected_song_id = Some(song.id);
-            } else if !myapp.filtered_songs.is_empty() {
-                // Index out of bounds, reset to first song
+            } else {
+                // Index was out of bounds, reset scroll state to the first item
                 song_scroll_state.select_first();
                 myapp.selected_song_id = Some(myapp.filtered_songs[0].id);
                 myapp.list_offset = 0;
-            } else {
-                myapp.selected_song_id = None;
             }
-        } else if !myapp.filtered_songs.is_empty() {
-            // No selection but songs exist, select first
-            song_scroll_state.select_first();
-            myapp.selected_song_id = Some(myapp.filtered_songs[0].id);
-            myapp.list_offset = 0;
-        } else {
-            myapp.selected_song_id = None;
         }
 
         // Handle audio playback tick (song end detection, auto-advance)

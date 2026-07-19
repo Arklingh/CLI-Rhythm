@@ -144,10 +144,7 @@ pub fn handle_key_event(
                         } else {
                             // Stop the currently playing song
                             {
-                                let sink_guard = match sink.lock() {
-                                    Ok(guard) => guard,
-                                    Err(poisoned) => poisoned.into_inner(),
-                                };
+                                let sink_guard = sink.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                                 sink_guard.clear();
                             }
                             myapp.song_time = None;
@@ -162,10 +159,7 @@ pub fn handle_key_event(
             }
         }
         (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
-            let sink_guard = match sink.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let sink_guard = sink.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             if sink_guard.is_paused() {
                 if let Some(current_id) = myapp.currently_playing_song {
                     if let Some(song) = myapp.songs.iter_mut().find(|s| s.id == current_id) {
@@ -315,7 +309,7 @@ pub fn handle_key_event(
 
                         // Unnecessary check?
                         if let Some(song) = myapp.find_song_by_id(song_id) {
-                            let file = std::fs::File::open(&song.path).unwrap();
+                            let file = fs::File::open(&song.path).unwrap();
                             let source =
                                 rodio::Decoder::new(std::io::BufReader::new(file)).unwrap();
 
